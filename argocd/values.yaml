@@ -27,6 +27,12 @@ server:
     pathType: Prefix
     tls: false
 
-argo-cd:
-  global:
-    domain: argocd.k8s.internal.smigorx.eu
+    annotations:
+      traefik.ingress.kubernetes.io/service.serversscheme: http
+
+global:
+  domain: argocd.k8s.internal.smigorx.eu
+
+configs:
+  params:
+    server.insecure: true
