@@ -6,12 +6,17 @@ metadata:
 spec:
   project: default
 
-  source:
-    repoURL: git@github.com:SmigorX/homelab.git
-    targetRevision: master
-    path: argocd/apps
-    directory:
-      recurse: true
+  sources:
+    - repoURL: git@github.com:SmigorX/homelab.git
+      targetRevision: master
+      path: argocd
+      directory:
+        include: app-of-apps.yaml
+    - repoURL: git@github.com:SmigorX/homelab.git
+      targetRevision: master
+      path: argocd/apps
+      directory:
+        recurse: true
 
   destination:
     server: https://kubernetes.default.svc
