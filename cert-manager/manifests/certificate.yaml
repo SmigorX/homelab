@@ -11,8 +11,6 @@ spec:
     name: letsencrypt-cloudflare
     kind: ClusterIssuer
   dnsNames:
-    - "*.k8s.internal.smigorx.eu"
-    - "k8s.internal.smigorx.eu"
     - "*.internal.smigorx.eu"
     - "internal.smigorx.eu"
     
