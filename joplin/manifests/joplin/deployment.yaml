@@ -37,6 +37,18 @@ spec:
               value: "22300"
             - name: APP_BASE_URL
               value: https://joplin.internal.smigorx.eu
+            - name: API_BASE_URL
+              value: https://joplin.internal.smigorx.eu
+            - name: SAML_ENABLED
+              value: "true"
+            - name: SAML_IDP_CONFIG_FILE
+              value: /saml/joplin-idp.xml
+            - name: SAML_SP_CONFIG_FILE
+              value: /saml/joplin-sp.xml
+            - name: DELETE_EXPIRED_SESSIONS_SCHEDULE
+              value: ""
+            - name: LOCAL_AUTH_ENABLED
+              value: "false"
             - name: DB_CLIENT
               value: pg
             - name: POSTGRES_HOST
@@ -52,6 +64,10 @@ spec:
                 secretKeyRef:
                   name: joplin-secrets
                   key: postgres-password
+          volumeMounts:
+            - name: saml-config
+              mountPath: /saml
+              readOnly: true
           ports:
             - name: http
               containerPort: 22300
@@ -72,3 +88,7 @@ spec:
             limits:
               cpu: "1"
               memory: 2Gi
+      volumes:
+        - name: saml-config
+          configMap:
+            name: joplin-saml-config
