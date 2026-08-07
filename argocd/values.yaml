@@ -22,11 +22,11 @@ server:
   ingress:
     enabled: true
     ingressClassName: traefik
-    hostname: argocd.internal.smigorx.eu
+    hostname: argocd.k8s.internal.smigorx.eu
     path: /
     pathType: Prefix
     tls: false
 
 argo-cd:
   global:
-    domain: argocd.internal.smigorx.eu
+    domain: argocd.k8s.internal.smigorx.eu
