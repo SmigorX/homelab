@@ -26,3 +26,7 @@ server:
     path: /
     pathType: Prefix
     tls: false
+
+argo-cd:
+  global:
+    domain: argocd.internal.smigorx.eu
