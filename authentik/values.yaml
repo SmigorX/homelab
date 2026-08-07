@@ -31,6 +31,7 @@ server:
       gethomepage.dev/description: Identity provider and single sign-on
       gethomepage.dev/group: Platform
       gethomepage.dev/icon: authentik.png
+      gethomepage.dev/href: https://auth.k8s.internal.smigorx.eu
 
     hosts:
       - auth.k8s.internal.smigorx.eu
