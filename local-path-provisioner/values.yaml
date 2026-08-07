@@ -1,0 +1,33 @@
+replicaCount: 1
+
+storageClass:
+  create: false
+
+provisionerName: smigorx.eu/local-path-hdd
+
+storageClassConfigs:
+  local-path-core:
+    storageClass:
+      create: true
+      defaultClass: false
+      defaultVolumeType: hostPath
+      reclaimPolicy: Retain
+      volumeBindingMode: WaitForFirstConsumer
+
+    nodePathMap:
+      - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
+        paths:
+          - /mnt/nas/core/k3s
+
+  local-path-bulk:
+    storageClass:
+      create: true
+      defaultClass: false
+      defaultVolumeType: hostPath
+      reclaimPolicy: Retain
+      volumeBindingMode: WaitForFirstConsumer
+
+    nodePathMap:
+      - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
+        paths:
+          - /mnt/nas/bulk/k3s
