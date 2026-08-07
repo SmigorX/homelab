@@ -1,0 +1,27 @@
+crds:
+  enabled: true
+  keep: true
+
+replicaCount: 1
+
+podDisruptionBudget:
+  enabled: false
+
+prometheus:
+  enabled: false
+
+cainjector:
+  enabled: true
+  replicaCount: 1
+
+  podDisruptionBudget:
+    enabled: false
+
+webhook:
+  replicaCount: 1
+
+  podDisruptionBudget:
+    enabled: false
+
+startupapicheck:
+  enabled: true
