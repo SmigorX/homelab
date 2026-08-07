@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: joplin
+  namespace: joplin
+  labels:
+    gethomepage.dev/enabled: "true"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    gethomepage.dev/name: Joplin
+    gethomepage.dev/description: Notes and synchronization server
+    gethomepage.dev/group: Applications
+    gethomepage.dev/icon: joplin.png
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: joplin.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: joplin
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - joplin.k8s.internal.smigorx.eu
+      secretName: joplin-tls
