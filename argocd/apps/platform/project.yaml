@@ -10,12 +10,11 @@ spec:
   sourceRepos:
     - git@github.com:SmigorX/homelab.git
     - https://argoproj.github.io/argo-helm
+    - https://charts.goauthentik.io
     - https://charts.jetstack.io
   destinations:
     - server: https://kubernetes.default.svc
-      namespace: argocd
-    - server: https://kubernetes.default.svc
-      namespace: cert-manager
+      namespace: "*"
   clusterResourceWhitelist:
     - group: "*"
       kind: "*"

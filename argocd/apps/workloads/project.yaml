@@ -12,9 +12,7 @@ spec:
     - https://jameswynn.github.io/helm-charts
   destinations:
     - server: https://kubernetes.default.svc
-      namespace: homepage
-    - server: https://kubernetes.default.svc
-      namespace: joplin
+      namespace: "*"
   clusterResourceWhitelist:
     - group: "*"
       kind: "*"

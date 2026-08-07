@@ -9,9 +9,10 @@ spec:
   description: Cluster storage services
   sourceRepos:
     - ghcr.io/rancher/local-path-provisioner/charts
+    - git@github.com:SmigorX/homelab.git
   destinations:
     - server: https://kubernetes.default.svc
-      namespace: local-path-hdd
+      namespace: "*"
   clusterResourceWhitelist:
     - group: "*"
       kind: "*"

@@ -1,0 +1,71 @@
+global:
+  revisionHistoryLimit: 3
+
+  env:
+    - name: AUTHENTIK_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: authentik-secrets
+          key: AUTHENTIK_SECRET_KEY
+
+    - name: AUTHENTIK_POSTGRESQL__PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: authentik-secrets
+          key: POSTGRES_PASSWORD
+
+authentik:
+  log_level: info
+
+server:
+  replicas: 1
+
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+
+    hosts:
+      - auth.k8s.internal.smigorx.eu
+
+    tls:
+      - secretName: authentik-tls
+        hosts:
+          - auth.k8s.internal.smigorx.eu
+
+  metrics:
+    enabled: false
+
+worker:
+  replicas: 1
+
+  metrics:
+    enabled: false
+
+geoip:
+  enabled: false
+
+prometheus:
+  rules:
+    enabled: false
+
+postgresql:
+  enabled: true
+
+  auth:
+    username: authentik
+    database: authentik
+
+    enablePostgresUser: false
+
+    existingSecret: authentik-secrets
+    secretKeys:
+      userPasswordKey: POSTGRES_PASSWORD
+
+  primary:
+    persistence:
+      enabled: true
+      storageClass: local-path-core
+      size: 8Gi

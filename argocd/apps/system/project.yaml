@@ -12,7 +12,7 @@ spec:
     - https://metallb.github.io/metallb
   destinations:
     - server: https://kubernetes.default.svc
-      namespace: metallb-system
+      namespace: "*"
   clusterResourceWhitelist:
     - group: "*"
       kind: "*"
