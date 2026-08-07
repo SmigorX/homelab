@@ -74,6 +74,7 @@ spec:
     - metadata:
         name: data
       spec:
+        storageClassName: local-path-bulk
         accessModes:
           - ReadWriteOnce
         resources:
