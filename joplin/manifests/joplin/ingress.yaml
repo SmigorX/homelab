@@ -17,7 +17,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: joplin.k8s.internal.smigorx.eu
+    - host: joplin.internal.smigorx.eu
       http:
         paths:
           - path: /
@@ -29,5 +29,5 @@ spec:
                   name: http
   tls:
     - hosts:
-        - joplin.k8s.internal.smigorx.eu
+        - joplin.internal.smigorx.eu
       secretName: joplin-tls
