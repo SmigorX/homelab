@@ -11,7 +11,11 @@ spec:
   method: kubernetes
 
   kubernetes:
-    identityId: "91f1e7ec-e10e-4712-a336-ada1db1cd19e"
+    identityIdRef:
+      name: infisical-kubernetes-auth
+      namespace: infisical-secrets-operator
+      key: identity-id
+
     serviceAccountRef:
       name: infisical-secrets-operator
       namespace: infisical-secrets-operator
