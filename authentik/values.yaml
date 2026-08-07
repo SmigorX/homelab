@@ -26,6 +26,11 @@ server:
 
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+      gethomepage.dev/enabled: "true"
+      gethomepage.dev/name: Authentik
+      gethomepage.dev/description: Identity provider and single sign-on
+      gethomepage.dev/group: Platform
+      gethomepage.dev/icon: authentik.png
 
     hosts:
       - auth.k8s.internal.smigorx.eu
