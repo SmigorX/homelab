@@ -3,9 +3,8 @@ kind: Ingress
 metadata:
   name: joplin
   namespace: joplin
-  labels:
-    gethomepage.dev/enabled: "true"
   annotations:
+    gethomepage.dev/enabled: "true"
     cert-manager.io/cluster-issuer: letsencrypt-cloudflare
     gethomepage.dev/name: Joplin
     gethomepage.dev/description: Notes and synchronization server
