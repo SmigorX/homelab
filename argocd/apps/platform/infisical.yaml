@@ -53,10 +53,13 @@ spec:
     - repoURL: git@github.com:SmigorX/homelab.git
       targetRevision: master
       ref: values
+    - repoURL: git@github.com:SmigorX/homelab.git
+      targetRevision: master
+      path: infisical/manifests
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: infisical-operator-system
+    namespace: infisical-secrets-operator
 
   syncPolicy:
     automated:

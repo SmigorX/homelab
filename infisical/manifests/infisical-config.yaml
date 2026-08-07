@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: infisical-config
-  namespace: infisical
-data:
-  ALLOW_INTERNAL_IP_CONNECTIONS: "true"
