@@ -1,0 +1,7 @@
+apiVersion: secrets.infisical.com/v1beta1
+kind: InfisicalConnection
+metadata:
+  name: selfhosted-infisical
+  namespace: infisical-operator
+spec:
+  address: http://infisical-infisical-standalone-infisical.infisical.svc.cluster.local:8080
