@@ -1,0 +1,28 @@
+dex:
+  enabled: false
+
+notifications:
+  enabled: false
+
+redis:
+  enabled: true
+
+applicationSet:
+  replicas: 1
+
+controller:
+  replicas: 1
+
+repoServer:
+  replicas: 1
+
+server:
+  replicas: 1
+
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hostname: argocd.internal.smigorx.eu
+    path: /
+    pathType: Prefix
+    tls: false
