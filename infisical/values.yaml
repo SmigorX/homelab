@@ -8,7 +8,7 @@ infisical:
 
 ingress:
   enabled: true
-  hostName: infisical.internal.smigorx.eu
+  hostName: infisical.k8s.internal.smigorx.eu
   ingressClassName: traefik
 
   nginx:
