@@ -2,16 +2,16 @@ apiVersion: secrets.infisical.com/v1beta1
 kind: InfisicalAuth
 metadata:
   name: k3s-auth
-  namespace: infisical-operator
+  namespace: infisical-secrets-operator
 spec:
   infisicalConnectionRef:
     name: selfhosted-infisical
-    namespace: infisical-operator
+    namespace: infisical-secrets-operator
 
   method: kubernetes
 
   kubernetes:
     identityId: "91f1e7ec-e10e-4712-a336-ada1db1cd19e"
     serviceAccountRef:
-      name: infisical-operator
-      namespace: infisical-operator
+      name: infisical-secrets-operator
+      namespace: infisical-secrets-operator
