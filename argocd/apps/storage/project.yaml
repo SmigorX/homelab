@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: storage
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Cluster storage services
+  sourceRepos:
+    - ghcr.io/rancher/local-path-provisioner/charts
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: local-path-hdd
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

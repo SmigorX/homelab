@@ -6,7 +6,7 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  project: default
+  project: workloads
 
   source:
     repoURL: git@github.com:SmigorX/homelab.git

@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: system
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: Cluster system services
+  sourceRepos:
+    - git@github.com:SmigorX/homelab.git
+    - https://metallb.github.io/metallb
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: metallb-system
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

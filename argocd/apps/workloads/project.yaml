@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: workloads
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  description: User-facing cluster workloads
+  sourceRepos:
+    - git@github.com:SmigorX/homelab.git
+    - https://jameswynn.github.io/helm-charts
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: homepage
+    - server: https://kubernetes.default.svc
+      namespace: joplin
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

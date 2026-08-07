@@ -4,7 +4,7 @@ metadata:
   name: local-path-hdd
   namespace: argocd
 spec:
-  project: default
+  project: storage
 
   source:
     repoURL: ghcr.io/rancher/local-path-provisioner/charts

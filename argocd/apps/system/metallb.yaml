@@ -6,7 +6,7 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
-  project: default
+  project: system
 
   sources:
     - repoURL: https://metallb.github.io/metallb
