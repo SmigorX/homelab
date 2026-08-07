@@ -17,5 +17,5 @@ spec:
       key: identity-id
 
     serviceAccountRef:
-      name: infisical-secrets-operator
+      name: infisical-secre-controller-manager
       namespace: infisical-secrets-operator
