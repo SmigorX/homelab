@@ -21,10 +21,13 @@ node.
 
 ## Secret
 
-The `yamtrack-secret-init` early sync Job creates `yamtrack-secrets` with a
-cryptographically random `secret` value only when it does not already exist.
-Its least-privilege ServiceAccount and RBAC objects are ordinary earlier sync
-resources, so they exist before the Job starts. The Job never logs or replaces
-the value.
-Back up this Secret: changing it invalidates signed sessions and other
-cryptographic state.
+The Yamtrack Pod's `initialize-secret` init container creates
+`yamtrack-secrets` with a cryptographically random `secret` value only when it
+does not already exist. It then passes the value to Yamtrack using the
+upstream-supported `SECRET_FILE` setting. This avoids a separate initialization
+Job and its ServiceAccount scheduling dependency. The ServiceAccount's
+least-privilege RBAC is created in sync wave `-5`, before the Deployment at
+wave `1`.
+
+The init container never logs or replaces the value. Back up this Secret:
+changing it invalidates signed sessions and other cryptographic state.
