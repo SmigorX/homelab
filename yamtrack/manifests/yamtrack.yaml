@@ -24,6 +24,9 @@ spec:
           env:
             - name: TZ
               value: Europe/Warsaw
+            
+            - name: ACCOUNT_EMAIL_VERIFICATION
+              value: : "none"
 
             - name: SECRET
               valueFrom:
