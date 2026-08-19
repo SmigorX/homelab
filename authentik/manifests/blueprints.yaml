@@ -97,3 +97,42 @@ data:
           group: Media Management
           meta_launch_url: https://yamtrack.k8s.internal.smigorx.eu
           provider: !KeyOf yamtrack-provider
+  paperless.yaml: |
+    version: 1
+    metadata:
+      name: Paperless OIDC application
+      labels:
+        blueprints.goauthentik.io/description: Paperless single sign-on configuration
+
+    entries:
+      - model: authentik_providers_oauth2.oauth2provider
+        id: paperless-provider
+        identifiers:
+          name: paperless
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+          client_type: confidential
+          client_id: paperless
+          client_secret: !Env PAPERLESS_OIDC_CLIENT_SECRET
+
+          redirect_uris:
+            - matching_mode: strict
+              url: https://paperless.k8s.internal.smigorx.eu/accounts/oidc/callback/
+
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+
+      - model: authentik_core.application
+        identifiers:
+          slug: paperless
+        attrs:
+          name: Paperless
+          group: Media Management
+          meta_launch_url: https://paperless.k8s.internal.smigorx.eu
+          provider: !KeyOf paperless-provider
