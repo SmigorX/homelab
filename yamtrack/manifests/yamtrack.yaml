@@ -19,26 +19,6 @@ spec:
       labels:
         app.kubernetes.io/name: yamtrack
     spec:
-      serviceAccountName: yamtrack-secret-init
-      initContainers:
-        - name: initialize-secret
-          image: bitnami/kubectl:1.34.3
-          imagePullPolicy: IfNotPresent
-          command:
-            - sh
-            - -ec
-            - |
-              umask 077
-              if kubectl get secret yamtrack-secrets >/dev/null 2>&1; then
-                kubectl get secret yamtrack-secrets -o jsonpath='{.data.secret}' | base64 -d > /run/yamtrack-secret/secret
-                exit 0
-              fi
-              secret="$(head -c 64 /dev/urandom | base64 | tr -d '\n')"
-              kubectl create secret generic yamtrack-secrets --from-literal=secret="$secret"
-              printf '%s' "$secret" > /run/yamtrack-secret/secret
-          volumeMounts:
-            - name: runtime-secret
-              mountPath: /run/yamtrack-secret
       containers:
         - name: yamtrack
           image: ghcr.io/fuzzygrim/yamtrack:latest
@@ -46,8 +26,11 @@ spec:
           env:
             - name: TZ
               value: Europe/Warsaw
-            - name: SECRET_FILE
-              value: /run/yamtrack-secret/secret
+            - name: SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: yamtrack-secrets
+                  key: secret
             - name: REDIS_URL
               value: redis://yamtrack-redis:6379
             - name: URLS
@@ -75,16 +58,10 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /yamtrack/db
-            - name: runtime-secret
-              mountPath: /run/yamtrack-secret
-              readOnly: true
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: yamtrack-data
-        - name: runtime-secret
-          emptyDir:
-            medium: Memory
 ---
 apiVersion: v1
 kind: Service
