@@ -36,7 +36,7 @@ spec:
             - name: SOCIAL_PROVIDERS
               value: allauth.socialaccount.providers.openid_connect
             - name: SOCIALACCOUNT_PROVIDERS_FILE
-              value: /run/secrets/yamtrack-oidc/socialaccount-providers
+              value: /run/secrets/SOCIALACCOUNT_PROVIDERS
             - name: ACCOUNT_DEFAULT_HTTP_PROTOCOL
               value: https
           ports:
@@ -63,7 +63,8 @@ spec:
             - name: data
               mountPath: /yamtrack/db
             - name: oidc-config
-              mountPath: /run/secrets/yamtrack-oidc
+              mountPath: /run/secrets/SOCIALACCOUNT_PROVIDERS
+              subPath: SOCIALACCOUNT_PROVIDERS
               readOnly: true
       volumes:
         - name: data
