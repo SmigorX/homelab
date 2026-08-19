@@ -24,34 +24,47 @@ spec:
           env:
             - name: TZ
               value: Europe/Warsaw
+
             - name: SECRET
               valueFrom:
                 secretKeyRef:
                   name: yamtrack-secrets
                   key: secret
+
             - name: REDIS_URL
               value: redis://yamtrack-redis:6379
+
             - name: URLS
-              value: https://yamtrack.k8s.internal.smigorx.eu
+              value: "https://yamtrack.k8s.internal.smigorx.eu"
+
             - name: SOCIAL_PROVIDERS
-              value: allauth.socialaccount.providers.openid_connect
-            - name: SOCIALACCOUNT_PROVIDERS_FILE
-              value: /run/secrets/SOCIALACCOUNT_PROVIDERS
+              value: "allauth.socialaccount.providers.openid_connect"
+
+            - name: SOCIALACCOUNT_PROVIDERS
+              valueFrom:
+                secretKeyRef:
+                  name: yamtrack-oidc-secrets
+                  key: SOCIALACCOUNT_PROVIDERS
+
             - name: ACCOUNT_DEFAULT_HTTP_PROTOCOL
               value: https
+
           ports:
             - name: http
               containerPort: 8000
+
           readinessProbe:
             tcpSocket:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 10
+
           livenessProbe:
             tcpSocket:
               port: http
             initialDelaySeconds: 30
             periodSeconds: 20
+
           resources:
             requests:
               cpu: 100m
@@ -59,20 +72,15 @@ spec:
             limits:
               cpu: "1"
               memory: 1Gi
+
           volumeMounts:
             - name: data
               mountPath: /yamtrack/db
-            - name: oidc-config
-              mountPath: /run/secrets/SOCIALACCOUNT_PROVIDERS
-              subPath: SOCIALACCOUNT_PROVIDERS
-              readOnly: true
+
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: yamtrack-data
-        - name: oidc-config
-          secret:
-            secretName: yamtrack-oidc-secrets
 ---
 apiVersion: v1
 kind: Service

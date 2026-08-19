@@ -29,14 +29,10 @@ Create the Authentik namespace secret:
     kubectl -n authentik create secret generic authentik-oidc-secrets \
       --from-literal=yamtrack-client-secret="$YAMTRACK_OIDC_SECRET"
 
-Create the Yamtrack namespace secret using a temporary file to avoid shell escaping issues:
+Create the Yamtrack namespace secret:
 
-    cat > /tmp/SOCIALACCOUNT_PROVIDERS <<EOF
-{"openid_connect":{"OAUTH_PKCE_ENABLED":true,"APPS":[{"provider_id":"authentik","name":"Authentik","client_id":"yamtrack","secret":"$YAMTRACK_OIDC_SECRET","settings":{"server_url":"https://auth.k8s.internal.smigorx.eu/application/o/yamtrack/.well-known/openid-configuration"}}]}}
-EOF
     kubectl -n yamtrack create secret generic yamtrack-oidc-secrets \
-      --from-file=SOCIALACCOUNT_PROVIDERS=/tmp/SOCIALACCOUNT_PROVIDERS
-    rm /tmp/SOCIALACCOUNT_PROVIDERS
+      --from-literal=SOCIALACCOUNT_PROVIDERS="{\"openid_connect\":{\"OAUTH_PKCE_ENABLED\":true,\"APPS\":[{\"provider_id\":\"authentik\",\"name\":\"Authentik\",\"client_id\":\"yamtrack\",\"secret\":\"$YAMTRACK_OIDC_SECRET\",\"settings\":{\"server_url\":\"https://auth.k8s.internal.smigorx.eu/application/o/yamtrack/.well-known/openid-configuration\"}}]}}"
 
 After both applications sync, Yamtrack's login page will offer Authentik.
 Leave local authentication enabled initially so existing users can link their
