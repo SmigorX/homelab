@@ -3,8 +3,6 @@ kind: Deployment
 metadata:
   name: yamtrack
   namespace: yamtrack
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
   labels:
     app.kubernetes.io/name: yamtrack
 spec:

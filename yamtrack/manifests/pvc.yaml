@@ -3,8 +3,6 @@ kind: PersistentVolumeClaim
 metadata:
   name: yamtrack-data
   namespace: yamtrack
-  annotations:
-    argocd.argoproj.io/sync-wave: "-4"
 spec:
   accessModes:
     - ReadWriteOnce
@@ -18,8 +16,6 @@ kind: PersistentVolumeClaim
 metadata:
   name: yamtrack-redis-data
   namespace: yamtrack
-  annotations:
-    argocd.argoproj.io/sync-wave: "-4"
 spec:
   accessModes:
     - ReadWriteOnce
