@@ -21,9 +21,10 @@ node.
 
 ## Secret
 
-The `yamtrack-secret-init` pre-sync Job creates `yamtrack-secrets` with a
+The `yamtrack-secret-init` early sync Job creates `yamtrack-secrets` with a
 cryptographically random `secret` value only when it does not already exist.
-Its least-privilege ServiceAccount and RBAC objects are earlier pre-sync hooks,
-so they exist before the Job starts. The Job never logs or replaces the value.
+Its least-privilege ServiceAccount and RBAC objects are ordinary earlier sync
+resources, so they exist before the Job starts. The Job never logs or replaces
+the value.
 Back up this Secret: changing it invalidates signed sessions and other
 cryptographic state.
