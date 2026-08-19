@@ -80,6 +80,9 @@ spec:
             - name: PAPERLESS_OCR_LANGUAGE
               value: pol+eng
 
+            - name: PAPERLESS_OCR_LANGUAGES 
+              value: pol
+
             # OIDC / Authentik
             - name: PAPERLESS_APPS
               value: "allauth.socialaccount.providers.openid_connect"
