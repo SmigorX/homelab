@@ -29,6 +29,12 @@ server:
 
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+      gethomepage.dev/enabled: "true"
+      gethomepage.dev/group: Infrastructure
+      gethomepage.dev/name: Argo CD
+      gethomepage.dev/description: GitOps continuous delivery
+      gethomepage.dev/icon: argocd.png
+      gethomepage.dev/href: https://argocd.k8s.internal.smigorx.eu
       traefik.ingress.kubernetes.io/router.entrypoints: websecure
       traefik.ingress.kubernetes.io/router.tls: "true"
       traefik.ingress.kubernetes.io/service.serversscheme: http
@@ -37,5 +43,19 @@ global:
   domain: argocd.k8s.internal.smigorx.eu
 
 configs:
+  cm:
+    url: https://argocd.k8s.internal.smigorx.eu
+    oidc.config: |
+      name: Authentik
+      issuer: https://auth.k8s.internal.smigorx.eu/application/o/argocd/
+      clientID: argocd
+      enablePKCEAuthentication: true
+      requestedScopes: ["openid", "profile", "email"]
+      requestedIDTokenClaims: {"groups": {"essential": true}}
+  rbac:
+    policy.default: role:readonly
+    policy.csv: |
+      g, authentik Admins, role:admin
+    scopes: "[groups, email]"
   params:
     server.insecure: true

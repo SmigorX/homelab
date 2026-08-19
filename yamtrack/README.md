@@ -8,7 +8,7 @@ Argo CD deploys Yamtrack through `argocd/apps/workloads/yamtrack.yaml`.
    Yamtrack is writing to it.
 2. Confirm that `/home/smigorx/docker/yamtrack/db/db.sqlite3` exists on the
    Kubernetes node. The migration Job mounts this directory read-only.
-3. Sync the `yamtrack` Argo CD application. The pre-sync migration Job copies
+3. Sync the `yamtrack` Argo CD application. The early sync migration Job copies
    the directory into the `yamtrack-data` PVC exactly once, then writes a
    `.yamtrack-migration-complete` marker.
 4. Confirm the application works at
@@ -23,5 +23,7 @@ node.
 
 The `yamtrack-secret-init` pre-sync Job creates `yamtrack-secrets` with a
 cryptographically random `secret` value only when it does not already exist.
-It never logs or replaces that value. Back up this Secret: changing it
-invalidates signed sessions and other cryptographic state.
+Its least-privilege ServiceAccount and RBAC objects are earlier pre-sync hooks,
+so they exist before the Job starts. The Job never logs or replaces the value.
+Back up this Secret: changing it invalidates signed sessions and other
+cryptographic state.

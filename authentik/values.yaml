@@ -17,6 +17,10 @@ global:
 authentik:
   log_level: info
 
+blueprints:
+  configMaps:
+    - authentik-blueprints
+
 server:
   replicas: 1
 
