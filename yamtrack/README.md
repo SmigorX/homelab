@@ -13,6 +13,23 @@ Create the Secret before syncing the application:
 Back up this Secret. Replacing it invalidates sessions and other cryptographic
 state.
 
+## Authentik OIDC
+
+The Authentik blueprint expects `authentik-oidc-secrets` in the `authentik`
+namespace and `yamtrack-oidc-secrets` in the `yamtrack` namespace. Both use
+the same confidential-client secret; create them before syncing Authentik or
+Yamtrack:
+
+    YAMTRACK_OIDC_SECRET="$(head -c 64 /dev/urandom | base64 | tr -d '\n')"
+    kubectl -n authentik create secret generic authentik-oidc-secrets \
+      --from-literal=yamtrack-client-secret="$YAMTRACK_OIDC_SECRET"
+    kubectl -n yamtrack create secret generic yamtrack-oidc-secrets \
+      --from-literal=socialaccount-providers="{\"openid_connect\":{\"OAUTH_PKCE_ENABLED\":true,\"APPS\":[{\"provider_id\":\"authentik\",\"name\":\"Authentik\",\"client_id\":\"yamtrack\",\"secret\":\"$YAMTRACK_OIDC_SECRET\",\"settings\":{\"server_url\":\"https://auth.k8s.internal.smigorx.eu/application/o/yamtrack/.well-known/openid-configuration\"}}]}}"
+
+After both applications sync, Yamtrack's login page will offer Authentik.
+Leave local authentication enabled initially so existing users can link their
+Authentik identity under **Settings → Accounts**.
+
 ## Importing existing data
 
 Export each user's tracked media from the existing Yamtrack UI as CSV. On the

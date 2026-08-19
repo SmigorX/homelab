@@ -10,7 +10,7 @@ metadata:
     gethomepage.dev/name: Yamtrack
     gethomepage.dev/description: Watchlist
     gethomepage.dev/icon: yamtrack.png
-    gethomepage.dev/href: https://yamtrack.internal.smigorx.eu
+    gethomepage.dev/href: https://yamtrack.k8s.internal.smigorx.eu
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
     traefik.ingress.kubernetes.io/service.serversscheme: http

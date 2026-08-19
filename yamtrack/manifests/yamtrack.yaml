@@ -33,6 +33,12 @@ spec:
               value: redis://yamtrack-redis:6379
             - name: URLS
               value: https://yamtrack.k8s.internal.smigorx.eu
+            - name: SOCIAL_PROVIDERS
+              value: allauth.socialaccount.providers.openid_connect
+            - name: SOCIALACCOUNT_PROVIDERS_FILE
+              value: /run/secrets/yamtrack-oidc/socialaccount-providers
+            - name: ACCOUNT_DEFAULT_HTTP_PROTOCOL
+              value: https
           ports:
             - name: http
               containerPort: 8000
@@ -56,10 +62,16 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /yamtrack/db
+            - name: oidc-config
+              mountPath: /run/secrets/yamtrack-oidc
+              readOnly: true
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: yamtrack-data
+        - name: oidc-config
+          secret:
+            secretName: yamtrack-oidc-secrets
 ---
 apiVersion: v1
 kind: Service
