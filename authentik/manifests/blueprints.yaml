@@ -3,6 +3,8 @@ kind: ConfigMap
 metadata:
   name: authentik-blueprints
   namespace: authentik
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 data:
   argocd.yaml: |
     version: 1
