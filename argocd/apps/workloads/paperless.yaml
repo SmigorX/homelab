@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: joplin
+  name: paperless
   namespace: argocd
 spec:
   project: workloads
@@ -9,13 +9,13 @@ spec:
   source:
     repoURL: git@github.com:SmigorX/homelab.git
     targetRevision: master
-    path: joplin/manifests
+    path: paperless/manifests
     directory:
       recurse: true
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: joplin
+    namespace: paperless
 
   syncPolicy:
     automated:
