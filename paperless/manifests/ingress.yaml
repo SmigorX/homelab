@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: paperless
+  namespace: paperless
+  annotations:
+    gethomepage.dev/enabled: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    gethomepage.dev/name: Paperless
+    gethomepage.dev/description: Documents and OCR
+    gethomepage.dev/group: Applications
+    gethomepage.dev/icon: paperless.png
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+spec:
+  ingressClassName: traefik
+
+  rules:
+    - host: paperless.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: paperless
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - paperless.k8s.internal.smigorx.eu
+      secretName: paperless-tls

@@ -1,0 +1,12 @@
+apiVersion: redis.redis.opstreelabs.in/v1beta2
+kind: Redis
+metadata:
+  name: paperless-redis
+  namespace: paperless
+spec:
+  kubernetesConfig:
+    image: valkey/valkey:8.1
+    imagePullPolicy: IfNotPresent
+
+  redisExporter:
+    enabled: false

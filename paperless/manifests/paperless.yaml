@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: paperless
+  namespace: paperless
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: paperless
+
+  template:
+    metadata:
+      labels:
+        app: paperless
+
+    spec:
+      containers:
+        - name: paperless
+          image: ghcr.io/paperless-ngx/paperless-ngx:3.0.5
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+
+          ports:
+            - name: http
+              containerPort: 8000
+
+          env:
+            # PostgreSQL
+            - name: PAPERLESS_DBENGINE
+              value: postgresql
+
+            - name: PAPERLESS_DBHOST
+              value: paperless-postgres-rw
+
+            - name: PAPERLESS_DBPORT
+              value: "5432"
+
+            - name: PAPERLESS_DBNAME
+              value: paperless
+
+            - name: PAPERLESS_DBUSER
+              valueFrom:
+                secretKeyRef:
+                  name: paperless-postgres-app
+                  key: username
+
+            - name: PAPERLESS_DBPASS
+              valueFrom:
+                secretKeyRef:
+                  name: paperless-postgres-app
+                  key: password
+
+            # Valkey
+            - name: PAPERLESS_REDIS
+              value: redis://paperless-redis:6379
+
+            # Paperless secret
+            - name: PAPERLESS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: paperless-secret
+                  key: PAPERLESS_SECRET_KEY
+
+            # Application
+            - name: PAPERLESS_URL
+              value: https://paperless.k8s.internal.smigorx.eu
+
+            - name: PAPERLESS_TIME_ZONE
+              value: Europe/Warsaw
+
+            # OCR
+            - name: PAPERLESS_OCR_LANGUAGE
+              value: pol+eng
+
+            # OIDC / Authentik
+            - name: PAPERLESS_APPS
+              value: "allauth.socialaccount.providers.openid_connect"
+
+            - name: PAPERLESS_SOCIALACCOUNT_PROVIDERS
+              valueFrom:
+                secretKeyRef:
+                  name: paperless-oidc
+                  key: config
+
+            - name: PAPERLESS_SOCIAL_AUTO_SIGNUP
+              value: "true"
+
+            - name: PAPERLESS_ACCOUNT_EMAIL_VERIFICATION
+              value: "none"
+
+          volumeMounts:
+            - name: paperless-data
+              mountPath: /usr/src/paperless
+
+      volumes:
+        - name: paperless-data
+          persistentVolumeClaim:
+            claimName: paperless-data

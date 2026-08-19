@@ -20,6 +20,12 @@ global:
           name: authentik-oidc-secrets
           key: yamtrack-client-secret
 
+    - name: PAPERLESS_OIDC_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-secrets
+          key: paperless-client-secret
+
 authentik:
   log_level: info
 
