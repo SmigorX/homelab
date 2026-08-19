@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: yamtrack-data
+  namespace: yamtrack
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path-core
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: yamtrack-redis-data
+  namespace: yamtrack
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path-core
+  resources:
+    requests:
+      storage: 1Gi
