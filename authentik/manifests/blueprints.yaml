@@ -119,7 +119,7 @@ data:
 
           redirect_uris:
             - matching_mode: strict
-              url: https://paperless.k8s.internal.smigorx.eu/accounts/oidc/callback/
+              url: https://paperless.k8s.internal.smigorx.eu/accounts/oidc/authentik/login/callback/
 
           property_mappings:
             - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
