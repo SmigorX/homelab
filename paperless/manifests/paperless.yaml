@@ -60,7 +60,7 @@ spec:
 
             # Valkey
             - name: PAPERLESS_REDIS
-              value: redis://paperless-redis:6379
+              value: redis://paperless-valkey:6379
 
             # Paperless secret
             - name: PAPERLESS_SECRET_KEY
