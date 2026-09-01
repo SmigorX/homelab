@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: onlyoffice-docs
+  namespace: argocd
+spec:
+  project: workloads
+
+  source:
+    repoURL: git@github.com:SmigorX/homelab.git
+    targetRevision: master
+    path: onlyoffice-docs/manifests
+    directory:
+      recurse: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: onlyoffice-docs
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: onlyoffice-docs
+  namespace: onlyoffice-docs
+  annotations:
+    gethomepage.dev/enabled: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    gethomepage.dev/name: OnlyOffice Docs
+    gethomepage.dev/description: Document editing and conversion server
+    gethomepage.dev/group: Applications
+    gethomepage.dev/icon: onlyoffice.png
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+spec:
+  ingressClassName: traefik
+
+  rules:
+    - host: onlyoffice.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: onlyoffice-docs
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - onlyoffice.k8s.internal.smigorx.eu
+      secretName: onlyoffice-docs-tls

@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: onlyoffice-docs
+  namespace: onlyoffice-docs
+  labels:
+    app.kubernetes.io/name: onlyoffice-docs
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: onlyoffice-docs
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: onlyoffice-docs
+
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: documentserver
+          image: onlyoffice/documentserver:9.4.0.1
+          imagePullPolicy: IfNotPresent
+
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+
+          ports:
+            - name: http
+              containerPort: 80
+
+          env:
+            - name: JWT_ENABLED
+              value: "true"
+
+            - name: JWT_HEADER
+              value: Authorization
+
+            - name: JWT_IN_BODY
+              value: "true"
+
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: onlyoffice-docs-secret
+                  key: JWT_SECRET
+
+          readinessProbe:
+            httpGet:
+              path: /info/info.json
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+
+          livenessProbe:
+            httpGet:
+              path: /info/info.json
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+
+          volumeMounts:
+            - name: onlyoffice-data
+              mountPath: /var/www/onlyoffice/Data
+              subPath: data
+
+            - name: onlyoffice-data
+              mountPath: /var/log/onlyoffice
+              subPath: logs
+
+            - name: onlyoffice-data
+              mountPath: /var/lib/onlyoffice/documentserver/App_Data/cache/files
+              subPath: cache
+
+      volumes:
+        - name: onlyoffice-data
+          persistentVolumeClaim:
+            claimName: onlyoffice-data
