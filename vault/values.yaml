@@ -1,0 +1,101 @@
+# Trimmed from the upstream chart defaults: https://github.com/hashicorp/vault-helm/blob/main/values.yaml
+# Anything not listed here just falls back to that file's default.
+
+global:
+  enabled: true
+
+  # TLS for end-to-end encrypted transport
+  tlsDisable: true
+
+injector:
+  enabled: false
+
+server:
+  image:
+    repository: "hashicorp/vault"
+    tag: "2.0.4"
+    pullPolicy: IfNotPresent
+
+  # OnDelete means config/image changes don't auto-roll the StatefulSet pods.
+  # That's intentional for Vault: a replaced pod comes up sealed and needs a
+  # manual unseal, so rollouts should be deliberate either way.
+  updateStrategyType: "OnDelete"
+
+  resources: {}
+  # resources:
+  #   requests:
+  #     memory: 256Mi
+  #     cpu: 250m
+  #   limits:
+  #     memory: 256Mi
+  #     cpu: 250m
+
+  # Ingress allows ingress services to be created to allow external access
+  # from Kubernetes to access Vault pods.
+  ingress:
+    enabled: true
+    annotations:
+      gethomepage.dev/enabled: "true"
+      cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+      gethomepage.dev/name: Vault
+      gethomepage.dev/description: Secrets management
+      gethomepage.dev/group: Platform
+      gethomepage.dev/icon: vault.png
+      gethomepage.dev/href: https://vault.k8s.internal.smigorx.eu
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      traefik.ingress.kubernetes.io/service.serversscheme: http
+    ingressClassName: traefik
+    hosts:
+      - host: vault.k8s.internal.smigorx.eu
+        paths: []
+    tls:
+      - secretName: vault-tls
+        hosts:
+          - vault.k8s.internal.smigorx.eu
+
+  # authDelegator enables a cluster role binding to be attached to the service
+  # account. This cluster role binding can be used to setup Kubernetes auth
+  # method. See https://developer.hashicorp.com/vault/docs/auth/kubernetes
+  authDelegator:
+    enabled: true
+
+  service:
+    enabled: true
+    port: 8200
+    targetPort: 8200
+
+  # This configures the Vault Statefulset to create a PVC for data
+  # storage when using the file or raft backend storage engines.
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    mountPath: "/vault/data"
+    storageClass: local-path-core
+    accessMode: ReadWriteOnce
+
+  auditStorage:
+    enabled: false
+
+  # Run Vault in "standalone" mode: single replica, file storage backend via
+  # the dataStorage PVC above. Not highly available — fine for one node.
+  standalone:
+    enabled: "-"
+    config: |-
+      ui = true
+
+      listener "tcp" {
+        tls_disable = 1
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+      storage "file" {
+        path = "/vault/data"
+      }
+
+  serviceAccount:
+    create: true
+
+# Vault UI, managed by config up there
+ui:
+  enabled: false
