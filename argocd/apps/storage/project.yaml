@@ -10,6 +10,7 @@ spec:
   sourceRepos:
     - ghcr.io/rancher/local-path-provisioner/charts
     - https://cloudnative-pg.github.io/charts
+    - https://ot-container-kit.github.io/helm-charts
     - git@github.com:SmigorX/homelab.git
   destinations:
     - server: https://kubernetes.default.svc
