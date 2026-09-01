@@ -26,6 +26,12 @@ global:
           name: authentik-oidc-secrets
           key: paperless-client-secret
 
+    - name: VAULT_OIDC_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-secrets
+          key: vault-client-secret
+
 authentik:
   log_level: info
 
