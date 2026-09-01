@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: redis-operator
+  namespace: argocd
+spec:
+  project: storage
+  sources:
+  - repoURL: https://ot-container-kit.github.io/helm-charts
+    chart: redis-operator
+    targetRevision: "0.25.0"
+    helm:
+      releaseName: redis-operator
+      valueFiles:
+      - $values/redis/operator/values.yaml
+      parameters:
+      - name: redisOperator.serviceDNSDomain
+        value: "cluster.local"
+  - repoURL: git@github.com:SmigorX/homelab.git
+    targetRevision: master
+    ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: redis-operator
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
