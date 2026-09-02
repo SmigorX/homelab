@@ -13,10 +13,21 @@ spec:
 
   jobTemplate:
     spec:
+      backoffLimit: 2
+
       template:
         spec:
           restartPolicy: Never
           enableServiceLinks: false
+
+          # Overriding command: bypasses the image entrypoint, which is what
+          # normally drops to www-data. Nextcloud's console refuses to run as
+          # anyone but the owner of config/config.php, so run as uid 33
+          # directly or every job dies with "Console has to be executed with
+          # the user that owns the file config/config.php".
+          securityContext:
+            runAsUser: 33
+            runAsGroup: 33
 
           containers:
             - name: cron
