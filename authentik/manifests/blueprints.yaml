@@ -22,6 +22,9 @@ data:
           invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           client_type: public
           client_id: argocd
+          grant_types:
+            - authorization_code
+            - refresh_token
           redirect_uris:
             - matching_mode: strict
               url: https://argocd.k8s.internal.smigorx.eu/pkce/verify
@@ -56,6 +59,11 @@ data:
           audience: joplin
           sp_binding: post
           signing_kp: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+          # Authentik rejects a signing keypair with neither flag set, which
+          # is why this blueprint never applied. Both match the provider that
+          # was created by hand and is actually serving Joplin today.
+          sign_assertion: true
+          sign_response: true
       - model: authentik_core.application
         identifiers:
           slug: joplin
@@ -78,9 +86,12 @@ data:
         attrs:
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
           invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          client_type: confidential
+          client_type: public
           client_id: yamtrack
           client_secret: !Env YAMTRACK_OIDC_CLIENT_SECRET
+          grant_types:
+            - authorization_code
+            - refresh_token
           redirect_uris:
             - matching_mode: strict
               url: https://yamtrack.k8s.internal.smigorx.eu/accounts/oidc/authentik/login/callback/
@@ -116,6 +127,9 @@ data:
           client_type: confidential
           client_id: paperless
           client_secret: !Env PAPERLESS_OIDC_CLIENT_SECRET
+          grant_types:
+            - authorization_code
+            - refresh_token
 
           redirect_uris:
             - matching_mode: strict
@@ -155,6 +169,9 @@ data:
           client_type: confidential
           client_id: vault
           client_secret: !Env VAULT_OIDC_CLIENT_SECRET
+          grant_types:
+            - authorization_code
+            - refresh_token
 
           redirect_uris:
             - matching_mode: strict
@@ -198,6 +215,14 @@ data:
           client_type: confidential
           client_id: nextcloud
           client_secret: !Env NEXTCLOUD_OIDC_CLIENT_SECRET
+
+          # Defaults to an empty list on the model, which rejects every
+          # authorize request with "Invalid grant_type for provider". The
+          # older providers here only have it because a migration backfilled
+          # them; anything created fresh must set it explicitly.
+          grant_types:
+            - authorization_code
+            - refresh_token
 
           redirect_uris:
             - matching_mode: strict
