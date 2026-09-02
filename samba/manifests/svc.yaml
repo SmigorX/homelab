@@ -1,0 +1,31 @@
+# SMB is raw TCP, so this bypasses Traefik entirely and takes its own
+# LAN address from MetalLB. The "ingress" pool has autoAssign: false, so the
+# address must be requested explicitly.
+apiVersion: v1
+kind: Service
+metadata:
+  name: samba
+  namespace: samba
+  annotations:
+    metallb.universe.tf/address-pool: ingress
+    metallb.universe.tf/loadBalancerIPs: 192.168.1.12
+spec:
+  type: LoadBalancer
+
+  # Preserves the real client IP in Samba's logs, and keeps traffic on the
+  # node that actually holds the data.
+  externalTrafficPolicy: Local
+
+  selector:
+    app: samba
+
+  ports:
+    - name: smb
+      port: 445
+      targetPort: smb
+      protocol: TCP
+
+    - name: netbios-ssn
+      port: 139
+      targetPort: netbios-ssn
+      protocol: TCP

@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: samba
+  namespace: samba
+spec:
+  replicas: 1
+
+  # hostPath onto a single node's disk: never run two of these at once.
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: samba
+
+  template:
+    metadata:
+      labels:
+        app: samba
+
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: samba
+          # smbd only - no avahi/wsdd2. Discovery broadcasts do not survive a
+          # MetalLB LoadBalancer anyway, and dropping them avoids needing
+          # CAP_NET_ADMIN. Connect by IP or DNS name instead.
+          image: servercontainers/samba:smbd-only-a3.24.1-s4.23.8-r0
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+
+          ports:
+            - name: smb
+              containerPort: 445
+            - name: netbios-ssn
+              containerPort: 139
+
+          env:
+            - name: TZ
+              value: Europe/Warsaw
+
+            - name: SAMBA_CONF_WORKGROUP
+              value: WORKGROUP
+
+            - name: SAMBA_CONF_SERVER_STRING
+              value: fedora-server
+
+            # Password comes from Vault. The variable name encodes the
+            # account name, so this creates the "smigorx" user.
+            - name: ACCOUNT_smigorx
+              valueFrom:
+                secretKeyRef:
+                  name: samba-secrets
+                  key: password
+
+            # The existing files under /mnt/nas/core/SMB are owned by 1000.
+            # Without pinning this, the image allocates the next free uid and
+            # new files would land under a different owner than the old ones.
+            - name: UID_smigorx
+              value: "1000"
+
+            # Equivalent of the compose SHARE line:
+            #   Data;/mnt/samba_share/Data;yes;no;no;smigorx;smigorx
+            # (browseable, not read-only, no guests, restricted to smigorx).
+            # Semicolons become newlines in the generated smb.conf.
+            #
+            # "admin users" is the 7th compose field and is load-bearing, not
+            # decoration: Data/Andrzej and Data/Backups are owned 0:101 mode
+            # drwxrwxr-x, so uid 1000 matches only "other" and cannot write
+            # them. admin users runs operations as root, which is how the old
+            # container reached those directories.
+            - name: SAMBA_VOLUME_CONFIG_data
+              value: "[Data]; path = /shares/Data; browseable = yes; read only = no; guest ok = no; valid users = smigorx; admin users = smigorx"
+
+          volumeMounts:
+            - name: shares
+              mountPath: /shares
+
+      volumes:
+        # Deliberately a hostPath, not a PVC: this directory already holds
+        # ~133G of existing data. A PVC would provision an empty volume under
+        # /mnt/nas/core/k3s and quietly serve nothing.
+        - name: shares
+          hostPath:
+            path: /mnt/nas/core/SMB
+            type: Directory
