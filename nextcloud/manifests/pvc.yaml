@@ -1,0 +1,14 @@
+# Nextcloud user data lives here, so it goes on the bulk pool
+# (/mnt/nas/bulk/k3s) rather than local-path-core.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nextcloud-data
+  namespace: nextcloud
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path-bulk
+  resources:
+    requests:
+      storage: 100Gi

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+spec:
+  selector:
+    app: nextcloud
+
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+
+  type: ClusterIP

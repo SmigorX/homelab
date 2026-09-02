@@ -32,6 +32,12 @@ global:
           name: authentik-oidc-secrets
           key: vault-client-secret
 
+    - name: NEXTCLOUD_OIDC_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-secrets
+          key: nextcloud-client-secret
+
 authentik:
   log_level: info
 

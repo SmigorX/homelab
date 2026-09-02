@@ -1,0 +1,40 @@
+# Nextcloud's background jobs. Without this, occ background:cron has nothing
+# driving it and maintenance tasks silently never run.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nextcloud-cron
+  namespace: nextcloud
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          enableServiceLinks: false
+
+          containers:
+            - name: cron
+              image: nextcloud:34.0.3-apache
+              command: ["php", "-f", "/var/www/html/cron.php"]
+
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 1Gi
+
+              volumeMounts:
+                - name: nextcloud-data
+                  mountPath: /var/www/html
+
+          volumes:
+            - name: nextcloud-data
+              persistentVolumeClaim:
+                claimName: nextcloud-data

@@ -1,0 +1,41 @@
+# The nextcloud image runs every executable *.sh in
+# /docker-entrypoint-hooks.d/before-starting on each container start, as
+# www-data with cwd /var/www/html. That is the only hook that runs after
+# both first install and every upgrade, which is what makes this the right
+# place to converge the OIDC provider config.
+#
+# The script is idempotent: `user_oidc:provider <identifier>` creates the
+# provider if absent and updates it in place if present.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nextcloud-oidc-hook
+  namespace: nextcloud
+data:
+  10-authentik-oidc.sh: |
+    #!/bin/sh
+    set -eu
+
+    # app:install fails if the app is already present, so only install once.
+    if ! php occ app:getpath user_oidc >/dev/null 2>&1; then
+      echo "==> installing user_oidc"
+      php occ app:install --keep-disabled user_oidc
+    fi
+    php occ app:enable user_oidc
+
+    # Background jobs are driven by the CronJob in cron.yaml, so switch off
+    # the default AJAX cron (which only fires while someone has a page open).
+    php occ background:cron
+
+    # --clientsecret-env keeps the secret out of the process list; the flag
+    # takes the NAME of the variable, not its value.
+    echo "==> converging Authentik OIDC provider"
+    php occ user_oidc:provider authentik \
+      --clientid="${NEXTCLOUD_OIDC_CLIENT_ID}" \
+      --clientsecret-env=NEXTCLOUD_OIDC_CLIENT_SECRET \
+      --discoveryuri="${NEXTCLOUD_OIDC_DISCOVERY_URI}" \
+      --scope="openid profile email" \
+      --unique-uid=0 \
+      --mapping-uid=preferred_username \
+      --mapping-display-name=name \
+      --mapping-email=email
