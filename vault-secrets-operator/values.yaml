@@ -19,8 +19,13 @@ defaultVaultConnection:
 # vault/README.md for the one-time bootstrap steps.
 defaultAuthMethod:
   enabled: true
+  # Chart renders this unquoted; a plain "" collapses to null and the CRD
+  # rejects it. The literal quotes force a real empty string.
+  namespace: '""'
+  allowedNamespaces: ["*"]   # required: consumers live outside this namespace
   method: kubernetes
   mount: kubernetes
   kubernetes:
     role: default
     serviceAccount: default
+
