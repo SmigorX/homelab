@@ -83,4 +83,7 @@ data:
       --unique-uid=0 \
       --mapping-uid=preferred_username \
       --mapping-display-name=name \
-      --mapping-email=email
+      --mapping-email=email \
+      --mapping-groups=groups \
+      --group-provisioning=1 \
+      --group-whitelist-regex='^admin$'

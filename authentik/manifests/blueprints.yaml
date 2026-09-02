@@ -235,6 +235,18 @@ data:
 
           signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
 
+      # Nextcloud grants admin purely by membership of the group whose id is
+      # literally "admin", and user_oidc uses the raw claim value as the group
+      # id. Authentik's own "authentik Admins" group would therefore create a
+      # separate, powerless Nextcloud group - hence a group named exactly
+      # "admin" here.
+      - model: authentik_core.group
+        identifiers:
+          name: admin
+        attrs:
+          users:
+            - !Find [authentik_core.user, [username, akadmin]]
+
       - model: authentik_core.application
         identifiers:
           slug: nextcloud
