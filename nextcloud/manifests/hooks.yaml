@@ -12,7 +12,7 @@ metadata:
   name: nextcloud-hooks
   namespace: nextcloud
 data:
-  00-trusted-domains.sh: |
+  00-system.sh: |
     #!/bin/sh
     set -eu
 
@@ -24,6 +24,16 @@ data:
       php occ config:system:set trusted_domains "$idx" --value="$domain"
       idx=$((idx + 1))
     done
+
+    # Nextcloud's LocalAddressChecker refuses any server-side HTTP request to
+    # a private address, failing with "violates local access rules". Both
+    # integrations here are local by design - Authentik on the LAN and the
+    # Document Server on a ClusterIP - so this has to be on or neither works.
+    #
+    # It does widen SSRF surface (link previews, federated sharing can now be
+    # pointed at internal hosts), which is the accepted trade for running an
+    # IdP that has no public address.
+    php occ config:system:set allow_local_remote_servers --value=true --type=boolean
   20-onlyoffice.sh: |
     #!/bin/sh
     set -eu
