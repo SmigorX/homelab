@@ -14,6 +14,7 @@ All three come from Vault via the Vault Secrets Operator — there is no
 | `secret/nextcloud/postgres` | `nextcloud-postgres-app` | `username`, `password`  |
 | `secret/nextcloud/app`      | `nextcloud-secrets`      | `admin-user`, `admin-password` |
 | `secret/nextcloud/oidc`     | `nextcloud-oidc`         | `client-secret`         |
+| `secret/onlyoffice-docs/jwt` | `nextcloud-onlyoffice`  | `JWT_SECRET`            |
 
 `secret/nextcloud/oidc`'s `client-secret` **must stay equal to**
 `nextcloud-client-secret` in `secret/authentik/oidc`. Authentik reads its copy
@@ -23,6 +24,11 @@ logins break.
 
 `admin-user`/`admin-password` only matter on first install; changing them
 later has no effect on the existing account.
+
+The last row is not a Nextcloud secret at all — it is the Document Server's
+own JWT secret, read straight from the path `onlyoffice-docs` uses. Because
+Vault is the source of truth, there is no copied Secret to drift; rotating
+`secret/onlyoffice-docs/jwt` updates both namespaces.
 
 ## Single sign-on
 
@@ -76,7 +82,40 @@ Served at `https://nextcloud.k8s.internal.smigorx.eu`.
 
 ## OnlyOffice
 
-`onlyoffice-docs` is already running in this cluster and can back Nextcloud's
-document editing. It is not wired up here — doing so needs the ONLYOFFICE
-connector app pointed at `https://onlyoffice.k8s.internal.smigorx.eu` with the
-JWT secret from `onlyoffice-docs/README.md`.
+Document editing is backed by the `onlyoffice-docs` deployment in this repo.
+`20-onlyoffice.sh` installs the `onlyoffice` connector app and writes four
+values through `occ config:app:set`:
+
+| Key                         | Value                                                   | Who calls it |
+| --------------------------- | ------------------------------------------------------- | ------------ |
+| `DocumentServerUrl`         | `https://onlyoffice.k8s.internal.smigorx.eu/`            | the browser  |
+| `DocumentServerInternalUrl` | `http://onlyoffice-docs.onlyoffice-docs.svc.cluster.local/` | Nextcloud |
+| `StorageUrl`                | `http://nextcloud.nextcloud.svc.cluster.local/`          | Document Server |
+| `jwt_secret`                | from `nextcloud-onlyoffice`                              | both         |
+
+Only the first is browser-facing, so it has to be the public hostname; the
+other two stay inside the cluster instead of hairpinning back through
+Traefik.
+
+**Trailing slashes are required.** The connector's PHP setters normalise them,
+but `occ config:app:set` writes the raw value straight past that code.
+
+`jwt_header` is pinned to `Authorization` to match `JWT_HEADER` on the
+Document Server. If the two disagree every editor session fails with a token
+error rather than anything more descriptive.
+
+Because the Document Server fetches files from Nextcloud over `StorageUrl`,
+`nextcloud.nextcloud.svc.cluster.local` must be a trusted domain — otherwise
+Nextcloud rejects those callbacks. That is why
+`NEXTCLOUD_TRUSTED_DOMAINS` lists it, and why `00-trusted-domains.sh` exists:
+the entrypoint only applies that variable during the initial install, so
+editing it later would otherwise have no effect on an existing instance.
+
+Check the handshake at any time:
+
+    kubectl -n nextcloud exec deploy/nextcloud -- \
+      su -s /bin/sh www-data -c "php occ onlyoffice:documentserver --check"
+
+The hook runs the same check on every start and logs the result. It is
+deliberately non-fatal, so a Document Server that is down cannot stop
+Nextcloud from starting.

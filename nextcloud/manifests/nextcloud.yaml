@@ -81,8 +81,12 @@ spec:
             # Behind Traefik: TLS terminates at the ingress, so Nextcloud has
             # to be told the public scheme/host or it builds http:// URLs and
             # OIDC redirects break.
+            # Space separated. The in-cluster name is here because the
+            # Document Server calls back to Nextcloud over StorageUrl, and
+            # Nextcloud rejects any Host not on this list. Only applied at
+            # install time, so 00-trusted-domains.sh converges it too.
             - name: NEXTCLOUD_TRUSTED_DOMAINS
-              value: nextcloud.k8s.internal.smigorx.eu
+              value: nextcloud.k8s.internal.smigorx.eu nextcloud.nextcloud.svc.cluster.local
 
             - name: TRUSTED_PROXIES
               value: 10.42.0.0/16
@@ -115,11 +119,32 @@ spec:
             - name: NEXTCLOUD_OIDC_DISCOVERY_URI
               value: https://auth.k8s.internal.smigorx.eu/application/o/nextcloud/.well-known/openid-configuration
 
+            # OnlyOffice - consumed by the before-starting hook.
+            # Browser-facing, so it must be the public URL. Trailing slashes
+            # matter: the app's setters normalise them, but occ
+            # config:app:set writes the raw value straight past them.
+            - name: ONLYOFFICE_URL
+              value: https://onlyoffice.k8s.internal.smigorx.eu/
+
+            # Nextcloud -> Document Server, stays inside the cluster.
+            - name: ONLYOFFICE_INTERNAL_URL
+              value: http://onlyoffice-docs.onlyoffice-docs.svc.cluster.local/
+
+            # Document Server -> Nextcloud, likewise internal.
+            - name: NEXTCLOUD_STORAGE_URL
+              value: http://nextcloud.nextcloud.svc.cluster.local/
+
+            - name: ONLYOFFICE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud-onlyoffice
+                  key: JWT_SECRET
+
           volumeMounts:
             - name: nextcloud-data
               mountPath: /var/www/html
 
-            - name: oidc-hook
+            - name: hooks
               mountPath: /docker-entrypoint-hooks.d/before-starting
 
           # First install plus the OIDC hook runs before Apache listens, so
@@ -153,8 +178,8 @@ spec:
           persistentVolumeClaim:
             claimName: nextcloud-data
 
-        - name: oidc-hook
+        - name: hooks
           configMap:
-            name: nextcloud-oidc-hook
+            name: nextcloud-hooks
             # run_path skips any hook script without the executable bit.
             defaultMode: 0755
