@@ -26,6 +26,12 @@ data:
             - authorization_code
             - refresh_token
           redirect_uris:
+            # Argo CD's native OIDC callback. dex.enabled is false, so this is
+            # NOT the /api/dex/callback that the goauthentik integration guide
+            # documents. It sends this even with enablePKCEAuthentication -
+            # the code_challenge rides along on the same request.
+            - matching_mode: strict
+              url: https://argocd.k8s.internal.smigorx.eu/auth/callback
             - matching_mode: strict
               url: https://argocd.k8s.internal.smigorx.eu/pkce/verify
           property_mappings:
