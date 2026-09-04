@@ -149,30 +149,45 @@ consequences worth knowing:
 documentation but registered by `annotatedyaml`, the loader Home Assistant
 delegates to. It is what keeps the Postgres password out of the ConfigMap.
 
-### The reverse proxy is configured in the UI, not here
+### Reverse proxy and MQTT are seeded, not clicked
 
 There is deliberately no `http:` block in that ConfigMap, and adding one back
-will not work. Home Assistant has deprecated HTTP configuration in YAML. The
-block is imported exactly once, as an unconfirmed *pending* trial; if nobody
-promotes it within five minutes Home Assistant reverts to the stable config,
-restarts, and ignores the YAML from then on.
+will not work. Home Assistant has deprecated HTTP configuration in YAML — it
+stops being read entirely in 2027.2. The block is imported once as an
+unconfirmed *pending* trial; if nobody promotes it within five minutes Home
+Assistant reverts to the stable config, restarts, and ignores the YAML from
+then on. On a fresh install nobody can promote it, because promotion needs a
+logged-in UI session and onboarding has not happened yet. The failure mode is
+worse than it sounds: until the proxy is trusted, `forwarded.py` answers every
+request carrying an `X-Forwarded-For` header with `HTTPBadRequest`, so the whole
+site returns **HTTP 400 through Traefik** — including the onboarding page needed
+to fix it.
 
-On a fresh install nobody can promote it, because promotion needs a logged-in
-UI session and onboarding has not happened yet. The failure mode is nastier
-than it sounds: until the proxy is trusted, `forwarded.py` answers every
-request carrying an `X-Forwarded-For` header with `HTTPBadRequest`, so the
-whole site returns **HTTP 400 through Traefik** — including the onboarding
-page needed to fix it. Reaching Home Assistant to break that loop means
-bypassing the proxy:
+MQTT has the same shape of problem for a different reason: it has been
+config-entry-only for several releases and cannot be expressed in YAML at all.
 
-    kubectl --context default port-forward -n home-automation \
-      deploy/home-assistant 8123:8123
+So the `seed-config` init container writes both directly, in the format Home
+Assistant itself uses:
 
-Then onboard at `http://localhost:8123`, and set the proxy under
-**Settings → System → Network**: enable the reverse-proxy option and add
-`10.42.0.0/16`, the k3s cluster CIDR that Traefik's pod sits in. The Ingress
-starts working immediately afterwards. This is a one-time step per fresh
-`/config` volume, not per restart.
+| File | What it carries |
+| --- | --- |
+| `/config/.storage/http` | `use_x_forwarded_for`, `trusted_proxies: 10.42.0.0/16`, and `yaml_migration_done` to suppress the YAML import/trial path |
+| `/config/.storage/core.config_entries` | the MQTT config entry — broker `mosquitto:1883`, user `homeassistant`, password read from `mqtt-credentials` at runtime |
+| `automations.yaml`, `scripts.yaml`, `scenes.yaml` | empty `!include` targets, which Home Assistant only creates when it also creates `configuration.yaml` |
+
+**Every one is written only if the file does not already exist.** Home Assistant
+and the UI always win after first boot, so this never fights a change made in
+Settings and never clobbers state. Re-running it on a live volume is a no-op.
+
+This is the one place in this repo that writes into an application's private
+state directory, which upstream does not support. The trade was made knowingly:
+the alternative is a rebuild that 400s until someone port-forwards past its own
+ingress. The failure mode is soft — if Home Assistant changes the schema, the
+seed simply does not match and the settings are absent on a fresh volume, to be
+re-entered under Settings → System → Network and Add Integration → MQTT. It
+cannot corrupt an existing install, because it never writes over one. If those
+files stop taking effect after a major upgrade, compare them against what the
+UI writes and update the init container.
 
 ## Database
 
@@ -257,27 +272,34 @@ The Zigbee2MQTT frontend has no login of its own whatsoever, which is why
 
 ## First run
 
-Everything below is one-time setup that cannot be expressed in a manifest.
+Only one manual step remains, and it is account creation rather than
+configuration.
 
-1. **Onboard Home Assistant through a port-forward**, not the Ingress — the
-   Ingress returns HTTP 400 until the proxy is trusted, as described above.
+Open `https://home-assistant.k8s.internal.smigorx.eu` and complete onboarding.
+The proxy is already trusted by the seed, so the Ingress works immediately —
+no port-forward needed. The account you create is Home Assistant's only login;
+it is not in Vault and not in Authentik.
 
-       kubectl --context default port-forward -n home-automation \
-         deploy/home-assistant 8123:8123
+MQTT is already configured when you arrive: Settings → Devices & Services shows
+the **MQTT** entry pointing at `mosquitto`, with the Zigbee2MQTT bridge device
+discovered under it.
 
-   Open `http://localhost:8123` and create the admin account. This account is
-   Home Assistant's only login; it is not in Vault and not in Authentik.
+Then pair devices at `https://zigbee2mqtt.k8s.internal.smigorx.eu`, logging in
+with `frontend-auth-token`. Hit *Permit join*, put each device into pairing
+mode, and it appears in Home Assistant through MQTT discovery within seconds.
 
-2. **Trust the proxy**: Settings → System → Network, enable the reverse-proxy
-   option and add `10.42.0.0/16`. Stop the port-forward and confirm
-   `https://home-assistant.k8s.internal.smigorx.eu` now loads.
+### Checking the link between Home Assistant and Zigbee2MQTT
 
-3. **Add the MQTT integration**: Settings → Devices & Services → Add
-   Integration → **MQTT**, broker `mosquitto`, port `1883`, username
-   `homeassistant`, password from `secret/home-automation/mqtt`. MQTT has been
-   config-entry-only for several releases, so this cannot go in YAML either.
+Zigbee2MQTT publishes retained discovery messages, so they can be inspected on
+the broker without touching Home Assistant:
 
-4. **Pair devices** at `https://zigbee2mqtt.k8s.internal.smigorx.eu`, logging
-   in with `frontend-auth-token`. Hit *Permit join*, put each device into
-   pairing mode, and it appears in Home Assistant through MQTT discovery
-   within seconds.
+    kubectl --context default exec -n home-automation deploy/mosquitto -- \
+      mosquitto_sub -h localhost -u homeassistant -P "$(...)" -v -W 5 -t 'homeassistant/#'
+
+Eight retained topics for the bridge itself means Zigbee2MQTT's half is
+healthy. For the other direction, toggle `switch.zigbee2mqtt_bridge_permit_join`
+in Home Assistant and watch it arrive:
+
+    kubectl --context default logs -n home-automation deploy/zigbee2mqtt --tail=20
+
+Discovery proves Zigbee2MQTT → Home Assistant; the toggle proves the reverse.

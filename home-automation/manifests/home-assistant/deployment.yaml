@@ -32,14 +32,107 @@ spec:
           image: ghcr.io/home-assistant/home-assistant:2026.9.0
 
           command:
-            - sh
+            - python3
             - -c
             - |
-              set -eu
-              for f in automations.yaml scenes.yaml; do
-                [ -e "/config/$f" ] || echo "[]" > "/config/$f"
-              done
-              [ -e /config/scripts.yaml ] || echo "{}" > /config/scripts.yaml
+              import json, os, secrets, datetime, pathlib
+
+              cfg = pathlib.Path("/config")
+              store = cfg / ".storage"
+              now = datetime.datetime.now(datetime.UTC).isoformat()
+
+              # Write only when absent, so Home Assistant and the UI always
+              # win over this seed after the first boot.
+              def seed(path, payload):
+                  if path.exists():
+                      return
+                  path.parent.mkdir(parents=True, exist_ok=True)
+                  path.write_text(json.dumps(payload, indent=2))
+                  print("seeded", path)
+
+              # The !include targets. Home Assistant only creates these when
+              # it also creates configuration.yaml, which it never does here.
+              for name, empty in (("automations.yaml", "[]"),
+                                  ("scenes.yaml", "[]"),
+                                  ("scripts.yaml", "{}")):
+                  f = cfg / name
+                  if not f.exists():
+                      f.write_text(empty)
+                      print("seeded", f)
+
+              # Reverse proxy. Home Assistant deprecated `http:` in YAML and
+              # drops it entirely in 2027.2, so this is the supported shape -
+              # the same file Settings -> System -> Network writes.
+              # yaml_migration_done stops the import/trial path from running,
+              # which is what otherwise 400s every proxied request on a fresh
+              # volume until someone confirms it in a UI they cannot reach.
+              seed(store / "http", {
+                  "version": 2,
+                  "minor_version": 2,
+                  "key": "http",
+                  "data": {
+                      "stable": {
+                          "server_port": 8123,
+                          "ssl_profile": "modern",
+                          "cors_allowed_origins": ["https://cast.home-assistant.io"],
+                          "use_x_forwarded_for": True,
+                          "trusted_proxies": ["10.42.0.0/16"],
+                          "use_x_frame_options": True,
+                          "ip_ban_enabled": True,
+                          "login_attempts_threshold": -1,
+                          "created_at": now,
+                          "error": None,
+                          "error_message": None,
+                      },
+                      "pending": None,
+                      "yaml_migration_done": True,
+                  },
+              })
+
+              # MQTT is config-entry-only and cannot live in YAML at all.
+              # Written only when core.config_entries is absent, i.e. on a
+              # fresh volume before onboarding; Home Assistant appends its own
+              # entries around this one. The password comes from the Vault
+              # secret at runtime and is never in git.
+              ulid = "".join(secrets.choice("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
+                             for _ in range(26))
+              seed(store / "core.config_entries", {
+                  "version": 1,
+                  "minor_version": 5,
+                  "key": "core.config_entries",
+                  "data": {"entries": [{
+                      "created_at": now,
+                      "modified_at": now,
+                      "data": {
+                          "broker": "mosquitto",
+                          "port": 1883,
+                          "protocol": "5",
+                          "transport": "tcp",
+                          "username": "homeassistant",
+                          "password": os.environ["MQTT_PASSWORD"],
+                      },
+                      "disabled_by": None,
+                      "discovery_keys": {},
+                      "domain": "mqtt",
+                      "entry_id": ulid,
+                      "minor_version": 1,
+                      "options": {},
+                      "pref_disable_new_entities": False,
+                      "pref_disable_polling": False,
+                      "source": "user",
+                      "subentries": [],
+                      "title": "mosquitto",
+                      "unique_id": None,
+                      "version": 2,
+                  }]},
+              })
+
+          env:
+            - name: MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-credentials
+                  key: homeassistant-password
 
           volumeMounts:
             - name: config
