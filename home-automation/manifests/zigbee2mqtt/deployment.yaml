@@ -135,6 +135,22 @@ spec:
             - name: ZIGBEE2MQTT_CONFIG_HOMEASSISTANT_ENABLED
               value: "true"
 
+            # Without this, buttons and remotes are useless in Home Assistant.
+            # Zigbee2MQTT defaults both action options to false, so a device
+            # whose only real output is `action` (single/double/long) gets
+            # discovered with nothing but battery and linkquality. The old
+            # alternative, legacy_action_sensor, creates a sensor that is empty
+            # except for a split second and is deprecated; this creates proper
+            # `event.*` entities carrying every action the device declares, up
+            # front. Still flagged experimental upstream, but it is the only
+            # non-deprecated way to get actions into Home Assistant.
+            #
+            # Device triggers do not fill the gap: Zigbee2MQTT publishes those
+            # lazily, one action value at a time, so each gesture has to be
+            # physically performed once before it can be selected.
+            - name: ZIGBEE2MQTT_CONFIG_HOMEASSISTANT_EXPERIMENTAL_EVENT_ENTITIES
+              value: "true"
+
           volumeMounts:
             - name: data
               mountPath: /app/data
