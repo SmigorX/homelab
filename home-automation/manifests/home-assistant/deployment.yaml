@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: home-assistant
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 1
+
+  # ReadWriteOnce on local-path: never run two of these at once.
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: home-assistant
+
+  template:
+    metadata:
+      labels:
+        app: home-assistant
+
+    spec:
+      enableServiceLinks: false
+
+      initContainers:
+        # Home Assistant only writes its default automations.yaml, scripts.yaml
+        # and scenes.yaml when it has to create configuration.yaml too. We
+        # supply configuration.yaml, so that bootstrap never runs, and the
+        # !include lines above would fail on an empty /config. Creating the
+        # files here keeps the UI editors working from the first boot.
+        - name: seed-config
+          image: ghcr.io/home-assistant/home-assistant:2026.9.0
+
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              for f in automations.yaml scenes.yaml; do
+                [ -e "/config/$f" ] || echo "[]" > "/config/$f"
+              done
+              [ -e /config/scripts.yaml ] || echo "{}" > /config/scripts.yaml
+
+          volumeMounts:
+            - name: config
+              mountPath: /config
+
+      containers:
+        - name: home-assistant
+          image: ghcr.io/home-assistant/home-assistant:2026.9.0
+
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+
+          ports:
+            - name: http
+              containerPort: 8123
+
+          env:
+            - name: TZ
+              value: Europe/Warsaw
+
+            # Built from the two keys CloudNativePG always puts in the generated
+            # Secret. $(VAR) is resolved by the kubelet from the entries above,
+            # so the password never appears in this manifest, and this does not
+            # depend on which convenience keys the operator version happens to
+            # add alongside them.
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: home-assistant-postgres-app
+                  key: username
+
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: home-assistant-postgres-app
+                  key: password
+
+            - name: HA_DB_URL
+              value: postgresql://$(PGUSER):$(PGPASSWORD)@home-assistant-postgres-rw:5432/homeassistant
+
+          volumeMounts:
+            - name: config
+              mountPath: /config
+
+            - name: config-file
+              mountPath: /config/configuration.yaml
+              subPath: configuration.yaml
+              readOnly: true
+
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: home-assistant-config
+
+        - name: config-file
+          configMap:
+            name: home-assistant-configuration

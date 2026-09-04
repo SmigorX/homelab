@@ -1,0 +1,124 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mosquitto
+  namespace: home-automation
+  annotations:
+    # Zigbee2MQTT and Home Assistant both crash-loop until the broker answers.
+    # They recover on their own, but starting in order keeps the logs readable.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  replicas: 1
+
+  # ReadWriteOnce on local-path: never run two of these at once.
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: mosquitto
+
+  template:
+    metadata:
+      labels:
+        app: mosquitto
+
+    spec:
+      enableServiceLinks: false
+
+      # 1883 is the uid/gid the eclipse-mosquitto image creates. Pinning it
+      # explicitly means the entrypoint's root-only chown never runs, and
+      # fsGroup makes both the PVC and the shared emptyDir writable.
+      securityContext:
+        runAsUser: 1883
+        runAsGroup: 1883
+        fsGroup: 1883
+
+      initContainers:
+        # mosquitto only reads hashed password files, so the plaintext from
+        # Vault has to be hashed at start-up. Doing it here keeps the hashes out
+        # of git and out of the image, and rotating a password is just a pod
+        # restart.
+        - name: passwd
+          image: eclipse-mosquitto:2.0.22
+
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              mosquitto_passwd -c -b /run/mosquitto/passwd homeassistant "$HOMEASSISTANT_PASSWORD"
+              mosquitto_passwd -b /run/mosquitto/passwd zigbee2mqtt "$ZIGBEE2MQTT_PASSWORD"
+              mosquitto_passwd -b /run/mosquitto/passwd lan "$LAN_PASSWORD"
+              chmod 0600 /run/mosquitto/passwd
+
+          env:
+            - name: HOMEASSISTANT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-credentials
+                  key: homeassistant-password
+
+            - name: ZIGBEE2MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-credentials
+                  key: zigbee2mqtt-password
+
+            - name: LAN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-credentials
+                  key: lan-password
+
+          volumeMounts:
+            - name: passwd
+              mountPath: /run/mosquitto
+
+      containers:
+        - name: mosquitto
+          image: eclipse-mosquitto:2.0.22
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+          ports:
+            - name: mqtt
+              containerPort: 1883
+
+          env:
+            - name: TZ
+              value: Europe/Warsaw
+
+          volumeMounts:
+            # Replaces the image's whole config directory, so the default
+            # localhost-only mosquitto.conf is gone rather than merged with.
+            - name: config
+              mountPath: /mosquitto/config
+              readOnly: true
+
+            - name: passwd
+              mountPath: /run/mosquitto
+              readOnly: true
+
+            - name: data
+              mountPath: /mosquitto/data
+
+      volumes:
+        - name: config
+          configMap:
+            name: mosquitto-config
+
+        # Written by the init container, read by mosquitto. Never persisted:
+        # it is regenerated from Vault on every start.
+        - name: passwd
+          emptyDir: {}
+
+        - name: data
+          persistentVolumeClaim:
+            claimName: mosquitto-data

@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+  namespace: home-automation
+data:
+  mosquitto.conf: |
+    # Mosquitto 2.x binds to localhost only when no listener is declared, which
+    # inside a container means "reachable by nothing". This line is mandatory,
+    # not tuning.
+    listener 1883 0.0.0.0
+
+    # The Service is a LoadBalancer on the LAN, so anonymous access would hand
+    # the whole broker to anything on the network.
+    allow_anonymous false
+    password_file /run/mosquitto/passwd
+    acl_file /mosquitto/config/acl
+
+    # Retained messages and subscriptions of persistent sessions. Without this
+    # Home Assistant re-discovers every device from scratch after a restart.
+    persistence true
+    persistence_location /mosquitto/data/
+
+    log_dest stdout
+
+  # Deliberately narrow, because the broker is on the LAN. Zigbee2MQTT publishes
+  # its own tree plus the Home Assistant discovery tree, and needs nothing else.
+  acl: |
+    user homeassistant
+    topic readwrite #
+
+    user zigbee2mqtt
+    topic readwrite zigbee2mqtt/#
+    topic readwrite homeassistant/#
+
+    # Spare account for Wi-Fi devices (ESPHome, Tasmota, Shelly) added later.
+    user lan
+    topic readwrite lan/#

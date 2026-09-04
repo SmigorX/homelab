@@ -1,0 +1,140 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zigbee2mqtt
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 1
+
+  # ReadWriteOnce on local-path, and a USB device that exactly one process may
+  # hold open. Two of these at once corrupts the device database.
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: zigbee2mqtt
+
+  template:
+    metadata:
+      labels:
+        app: zigbee2mqtt
+
+    spec:
+      enableServiceLinks: false
+
+      # The only manifest in the repo that needs to choose a node: the Zigbee
+      # coordinator is a physical stick in one machine. Everything else here is
+      # already pinned by its local-path volume.
+      nodeSelector:
+        home-automation: "true"
+
+      # /dev/ttyUSB0 is root:dialout 0660 and gid 18 is dialout on the host.
+      # The image runs as root today, which bypasses this anyway; the
+      # supplemental group is what keeps the dongle reachable if upstream ever
+      # switches to a non-root user.
+      #
+      # No privileged: true, and no SELinux workaround: k3s runs without
+      # --selinux, so containerd applies no label and the usbtty_device_t
+      # type on the device is never checked. If k3s is ever started with
+      # --selinux, the fix is `setsebool -P container_use_devices 1` on the
+      # host, not raising the pod's privileges.
+      securityContext:
+        supplementalGroups:
+          - 18
+
+      containers:
+        - name: zigbee2mqtt
+          image: ghcr.io/koenkk/zigbee2mqtt:2.14.1
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          ports:
+            - name: http
+              containerPort: 8080
+
+          # Configured entirely through environment variables rather than a
+          # mounted configuration.yaml. Zigbee2MQTT rewrites its own config file
+          # at runtime (network key, pan_id, anything changed in the frontend),
+          # so a ConfigMap mount would either be read-only and break it or drift
+          # from git. Env vars override the file, so these stay authoritative
+          # while Zigbee2MQTT keeps ownership of the rest.
+          env:
+            - name: TZ
+              value: Europe/Warsaw
+
+            # MQTT
+            - name: ZIGBEE2MQTT_CONFIG_MQTT_SERVER
+              value: mqtt://mosquitto:1883
+
+            - name: ZIGBEE2MQTT_CONFIG_MQTT_USER
+              value: zigbee2mqtt
+
+            - name: ZIGBEE2MQTT_CONFIG_MQTT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-credentials
+                  key: zigbee2mqtt-password
+
+            # Adapter. The SONOFF Dongle Plus MG24 is an EFR32MG24 running
+            # EmberZNet, so the driver is "ember" and the stock SONOFF firmware
+            # speaks 115200. rtscts is disabled up front because hardware flow
+            # control is what triggers this dongle's ASH_ERROR_TIMEOUT loop.
+            - name: ZIGBEE2MQTT_CONFIG_SERIAL_PORT
+              value: /dev/serial/by-id/usb-SONOFF_SONOFF_Dongle_Plus_MG24_2ca7e4dca4a2ef11a1aa906661ce3355-if00-port0
+
+            - name: ZIGBEE2MQTT_CONFIG_SERIAL_ADAPTER
+              value: ember
+
+            - name: ZIGBEE2MQTT_CONFIG_SERIAL_BAUDRATE
+              value: "115200"
+
+            - name: ZIGBEE2MQTT_CONFIG_SERIAL_RTSCTS
+              value: "false"
+
+            # Frontend. The token is not optional: the frontend has no login of
+            # its own and it is published on an Ingress.
+            - name: ZIGBEE2MQTT_CONFIG_FRONTEND_ENABLED
+              value: "true"
+
+            - name: ZIGBEE2MQTT_CONFIG_FRONTEND_PORT
+              value: "8080"
+
+            - name: ZIGBEE2MQTT_CONFIG_FRONTEND_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: zigbee2mqtt-secrets
+                  key: frontend-auth-token
+
+            # Publishes the discovery topics Home Assistant reads.
+            - name: ZIGBEE2MQTT_CONFIG_HOMEASSISTANT_ENABLED
+              value: "true"
+
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+
+            - name: dongle
+              mountPath: /dev/serial/by-id/usb-SONOFF_SONOFF_Dongle_Plus_MG24_2ca7e4dca4a2ef11a1aa906661ce3355-if00-port0
+
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: zigbee2mqtt-data
+
+        # The by-id path is derived from the stick's serial number, so it
+        # survives a replug. /dev/ttyUSB0 does not: it is whatever number the
+        # kernel hands out next, and would silently point at a different device
+        # once anything else USB-serial is attached.
+        - name: dongle
+          hostPath:
+            path: /dev/serial/by-id/usb-SONOFF_SONOFF_Dongle_Plus_MG24_2ca7e4dca4a2ef11a1aa906661ce3355-if00-port0
+            type: CharDevice

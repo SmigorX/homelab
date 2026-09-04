@@ -1,0 +1,37 @@
+# Mounted read-only at /config/configuration.yaml. This is safe because Home
+# Assistant never writes this file: everything added through the UI lands in
+# /config/.storage instead. The catch is that subPath mounts do not hot-update,
+# so a change here needs a pod restart to take effect.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-assistant-configuration
+  namespace: home-automation
+data:
+  configuration.yaml: |
+    default_config:
+
+    homeassistant:
+      name: Home
+      time_zone: Europe/Warsaw
+      external_url: https://home-assistant.k8s.internal.smigorx.eu
+      internal_url: https://home-assistant.k8s.internal.smigorx.eu
+
+    http:
+      # Every request arrives from Traefik, so without this Home Assistant sees
+      # one client address for the whole LAN and its rate limiting and logging
+      # are meaningless. 10.42.0.0/16 is the k3s cluster CIDR.
+      use_x_forwarded_for: true
+      trusted_proxies:
+        - 10.42.0.0/16
+
+    recorder:
+      # !env_var is not on the Home Assistant secrets documentation page, but it
+      # is registered by annotatedyaml, the loader Home Assistant delegates to.
+      # It is how the Postgres password stays out of this ConfigMap.
+      db_url: !env_var HA_DB_URL
+      purge_keep_days: 365
+
+    automation: !include automations.yaml
+    script: !include scripts.yaml
+    scene: !include scenes.yaml

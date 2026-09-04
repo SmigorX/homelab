@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: home-automation
+  namespace: argocd
+spec:
+  project: workloads
+
+  # One Application for Mosquitto, Zigbee2MQTT and Home Assistant together.
+  # They share MQTT credentials and are always rolled as a unit, so splitting
+  # them into three Applications would only add ordering problems. `recurse`
+  # picks up the per-component subdirectories, as it does for joplin.
+  source:
+    repoURL: git@github.com:SmigorX/homelab.git
+    targetRevision: master
+    path: home-automation/manifests
+    directory:
+      recurse: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: home-automation
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

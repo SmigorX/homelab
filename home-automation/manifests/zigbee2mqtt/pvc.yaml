@@ -1,0 +1,16 @@
+# This volume *is* the Zigbee network: Zigbee2MQTT stores the network key, the
+# PAN ID and the device database here. Losing it means re-pairing every device
+# by hand. local-path-core has reclaimPolicy: Retain, which protects against an
+# accidental `prune` but is not a backup.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zigbee2mqtt-data
+  namespace: home-automation
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path-core
+  resources:
+    requests:
+      storage: 1Gi

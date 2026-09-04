@@ -1,0 +1,26 @@
+# MQTT is raw TCP, so this bypasses Traefik entirely and takes its own LAN
+# address from MetalLB. The "ingress" pool has autoAssign: false, so the
+# address must be requested explicitly. .11 is Traefik and .12 is samba.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+  namespace: home-automation
+  annotations:
+    metallb.universe.tf/address-pool: ingress
+    metallb.universe.tf/loadBalancerIPs: 192.168.1.13
+spec:
+  type: LoadBalancer
+
+  # Keeps the real client address in Mosquitto's connection log, which is the
+  # only way to tell which device a rogue subscription came from.
+  externalTrafficPolicy: Local
+
+  selector:
+    app: mosquitto
+
+  ports:
+    - name: mqtt
+      port: 1883
+      targetPort: mqtt
+      protocol: TCP

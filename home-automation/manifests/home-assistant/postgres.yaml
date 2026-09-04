@@ -1,0 +1,30 @@
+# Unlike paperless and nextcloud, this Cluster has no `bootstrap.initdb.secret`.
+# CloudNativePG then generates home-assistant-postgres-app itself and owns the
+# password, so there is nothing to keep in sync with Vault. The trade-off is
+# that the password only exists in the cluster: it is recoverable from the
+# Secret, not from Vault.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: home-assistant-postgres
+  namespace: home-automation
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  instances: 1
+
+  bootstrap:
+    initdb:
+      database: homeassistant
+      owner: homeassistant
+
+  storage:
+    storageClass: local-path-core
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
