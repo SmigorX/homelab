@@ -46,20 +46,33 @@ front: hardware flow control is what puts this dongle into its
 `ASH_ERROR_TIMEOUT` loop. If it still loops, the firmware itself is the
 suspect, and `ember-zli` reflashes it from the host.
 
-### Why no `privileged: true`
+### Why Zigbee2MQTT is privileged
 
-`/dev/ttyUSB0` is `root:dialout 0660`, and the host runs SELinux in enforcing
-mode with the device labelled `usbtty_device_t`. Neither blocks the pod:
+It is the only privileged pod in this repo, and the only one that needs to be.
 
-- k3s here runs **without** `--selinux`, so containerd applies no SELinux label
-  to containers and the device's type is never checked. Should k3s ever be
-  started with `--selinux`, the fix is `setsebool -P container_use_devices 1`
-  on the host — not raising the pod's privileges.
-- The Zigbee2MQTT image runs as root today, which bypasses the file mode.
-  `supplementalGroups: [18]` (`dialout`) is set anyway, so the dongle stays
-  reachable if upstream ever switches to a non-root user.
+Two things that look like they would block access do not. `/dev/ttyUSB0` is
+`root:dialout 0660`, and the image runs as root, so the file mode is satisfied
+(`supplementalGroups: [18]` is set anyway, for the day upstream moves to a
+non-root user). The host runs SELinux enforcing with the device labelled
+`usbtty_device_t`, but k3s here runs **without** `--selinux`, so containerd
+applies no label and the type is never checked — there were no AVC denials
+when this failed.
 
-The repo has no other pod holding a device, and this one stays unprivileged.
+What actually blocks it is the **cgroup device filter**. runc gives every
+unprivileged container a filter allowing only a default set of devices
+(`null`, `zero`, `tty`, `random`, …). Bind-mounting the dongle through
+`hostPath` creates the node inside the container but does not add it to that
+allowlist, so `open()` returns `EPERM` — `Operation not permitted`, which is
+worth distinguishing from the `EACCES` a file-mode problem would give. Two
+otherwise identical test pods confirmed it: privileged opened the device,
+unprivileged did not.
+
+Kubernetes has no field to allowlist a single device for an unprivileged
+container. The only narrower option is a device plugin such as
+smarter-device-manager, which advertises `/dev/ttyUSB0` as a schedulable
+resource and lets kubelet add just that device — at the cost of a DaemonSet on
+every node. That trade was not worth it for one dongle on one host, but it is
+the thing to reach for if a second device ever needs the same treatment.
 
 ### Node pinning
 

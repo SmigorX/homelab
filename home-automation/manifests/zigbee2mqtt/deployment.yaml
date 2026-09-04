@@ -29,16 +29,10 @@ spec:
       nodeSelector:
         home-automation: "true"
 
-      # /dev/ttyUSB0 is root:dialout 0660 and gid 18 is dialout on the host.
-      # The image runs as root today, which bypasses this anyway; the
-      # supplemental group is what keeps the dongle reachable if upstream ever
-      # switches to a non-root user.
-      #
-      # No privileged: true, and no SELinux workaround: k3s runs without
-      # --selinux, so containerd applies no label and the usbtty_device_t
-      # type on the device is never checked. If k3s is ever started with
-      # --selinux, the fix is `setsebool -P container_use_devices 1` on the
-      # host, not raising the pod's privileges.
+      # gid 18 is dialout on the host, which owns /dev/ttyUSB0 (mode 0660).
+      # The image runs as root today, so this changes nothing yet; it is what
+      # keeps the dongle reachable if upstream ever moves to a non-root user.
+      # It is NOT what grants access - see privileged below.
       securityContext:
         supplementalGroups:
           - 18
@@ -46,6 +40,22 @@ spec:
       containers:
         - name: zigbee2mqtt
           image: ghcr.io/koenkk/zigbee2mqtt:2.14.1
+
+          # The one privileged pod in this repo, and it is unavoidable rather
+          # than lazy. Bind-mounting the device node is not enough: runc gives
+          # every unprivileged container a cgroup device filter that allows
+          # only a default set (null, zero, tty, random...), so opening the
+          # dongle fails with EPERM no matter what the file mode or SELinux
+          # label says. Verified by A/B test - identical pods, privileged
+          # opened /dev/ttyUSB0 and unprivileged got "Operation not permitted".
+          #
+          # Kubernetes has no field to allowlist one device for an
+          # unprivileged container; the only narrower option is a device
+          # plugin such as smarter-device-manager, which trades this line for
+          # a DaemonSet on every node. Revisit if a second device ever needs
+          # the same treatment.
+          securityContext:
+            privileged: true
 
           resources:
             requests:
