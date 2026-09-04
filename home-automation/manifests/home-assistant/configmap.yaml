@@ -17,13 +17,14 @@ data:
       external_url: https://home-assistant.k8s.internal.smigorx.eu
       internal_url: https://home-assistant.k8s.internal.smigorx.eu
 
-    http:
-      # Every request arrives from Traefik, so without this Home Assistant sees
-      # one client address for the whole LAN and its rate limiting and logging
-      # are meaningless. 10.42.0.0/16 is the k3s cluster CIDR.
-      use_x_forwarded_for: true
-      trusted_proxies:
-        - 10.42.0.0/16
+    # No `http:` block here on purpose. Home Assistant has deprecated HTTP
+    # configuration in YAML: it imports the block once as an unconfirmed
+    # "pending" trial, reverts to the stable config after five minutes if
+    # nobody promotes it, and ignores the YAML from then on. On a fresh
+    # install nobody *can* promote it, because promotion needs a logged-in
+    # UI session and onboarding has not happened yet. The reverse-proxy
+    # settings therefore live in the UI, under
+    # Settings -> System -> Network. See the README.
 
     recorder:
       # !env_var is not on the Home Assistant secrets documentation page, but it
