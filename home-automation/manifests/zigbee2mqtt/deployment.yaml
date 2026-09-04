@@ -3,8 +3,6 @@ kind: Deployment
 metadata:
   name: zigbee2mqtt
   namespace: home-automation
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
 spec:
   replicas: 1
 

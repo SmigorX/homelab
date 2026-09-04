@@ -14,10 +14,19 @@ without the broker — splitting them would buy nothing but ordering problems.
 `directory.recurse: true` picks up the subdirectories, exactly as it does for
 joplin.
 
-Sync waves keep the start-up readable rather than correct: Mosquitto and
-Postgres are wave `0`, Home Assistant and Zigbee2MQTT wave `1`. Both clients
-recover on their own if they start first, they just log failures while they
-wait.
+There are deliberately **no `argocd.argoproj.io/sync-wave` annotations here**,
+and adding any is a trap. `local-path-core` uses
+`volumeBindingMode: WaitForFirstConsumer`, so a PVC stays `Pending` until a pod
+that mounts it is scheduled. Argo CD reads a `Pending` PVC as Progressing and
+will not advance to the next wave, so putting a PVC in an earlier wave than its
+consumer deadlocks the sync permanently: the PVC waits for the pod, and the pod
+waits for the wave.
+
+Nothing here needs the ordering anyway. Mosquitto, Postgres and the two
+Vault-synced Secrets can all come up after their consumers; the kubelet retries
+`CreateContainerConfigError` until the Secret exists, and both MQTT clients
+reconnect on their own. Starting out of order costs some noise in the logs for
+a minute, which is a much better trade than a stuck sync.
 
 ## The dongle
 

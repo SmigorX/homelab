@@ -3,10 +3,6 @@ kind: Deployment
 metadata:
   name: mosquitto
   namespace: home-automation
-  annotations:
-    # Zigbee2MQTT and Home Assistant both crash-loop until the broker answers.
-    # They recover on their own, but starting in order keeps the logs readable.
-    argocd.argoproj.io/sync-wave: "0"
 spec:
   replicas: 1
 
