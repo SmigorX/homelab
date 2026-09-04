@@ -69,6 +69,15 @@ spec:
             - name: TZ
               value: Europe/Warsaw
 
+            # Zigbee2MQTT 2.x runs an interactive onboarding wizard instead of
+            # starting the radio whenever data/configuration.yaml is missing or
+            # empty, which on a fresh PVC is always. The ZIGBEE2MQTT_CONFIG_*
+            # vars below do not suppress it: onboarding.ts checks only for the
+            # file's existence. This flag short-circuits that check, which is
+            # what makes the deployment headless.
+            - name: Z2M_ONBOARD_NO_SERVER
+              value: "1"
+
             # MQTT
             - name: ZIGBEE2MQTT_CONFIG_MQTT_SERVER
               value: mqtt://mosquitto:1883

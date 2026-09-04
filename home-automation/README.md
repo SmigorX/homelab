@@ -97,6 +97,15 @@ file would either be read-only and break it, or drift from git. Environment
 variables override the file, so the settings that matter stay authoritative in
 the Deployment while Zigbee2MQTT keeps ownership of the rest.
 
+`Z2M_ONBOARD_NO_SERVER=1` is what makes that work unattended. Zigbee2MQTT 2.x
+serves an interactive onboarding wizard instead of starting the radio whenever
+`data/configuration.yaml` is missing or empty, which on a fresh PVC it always
+is. The `ZIGBEE2MQTT_CONFIG_*` variables do not suppress it — `onboarding.ts`
+tests only whether the file exists, not whether the settings are complete — so
+without this flag the pod comes up Running, serves a setup page and never
+touches the dongle. Note the different prefix: it is a runtime flag, not a
+config path.
+
 **Home Assistant** gets its `configuration.yaml` from a ConfigMap, mounted
 read-only through `subPath`. That is safe because Home Assistant never writes
 this file; everything added through the UI goes to `/config/.storage`. Two

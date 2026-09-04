@@ -47,6 +47,12 @@ spec:
               mosquitto_passwd -b /run/mosquitto/passwd zigbee2mqtt "$ZIGBEE2MQTT_PASSWORD"
               mosquitto_passwd -b /run/mosquitto/passwd lan "$LAN_PASSWORD"
               chmod 0600 /run/mosquitto/passwd
+              # A ConfigMap mount is world-readable and root-owned, which
+              # mosquitto warns about today and will refuse outright in a
+              # future release. Copying it here gets it the same 0600
+              # ownership as the password file.
+              cp /mosquitto/config/acl /run/mosquitto/acl
+              chmod 0600 /run/mosquitto/acl
 
           env:
             - name: HOMEASSISTANT_PASSWORD
@@ -70,6 +76,10 @@ spec:
           volumeMounts:
             - name: passwd
               mountPath: /run/mosquitto
+
+            - name: config
+              mountPath: /mosquitto/config
+              readOnly: true
 
       containers:
         - name: mosquitto

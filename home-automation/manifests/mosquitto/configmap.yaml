@@ -14,7 +14,7 @@ data:
     # the whole broker to anything on the network.
     allow_anonymous false
     password_file /run/mosquitto/passwd
-    acl_file /mosquitto/config/acl
+    acl_file /run/mosquitto/acl
 
     # Retained messages and subscriptions of persistent sessions. Without this
     # Home Assistant re-discovers every device from scratch after a restart.
