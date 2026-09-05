@@ -261,3 +261,54 @@ data:
           group: Applications
           meta_launch_url: https://nextcloud.k8s.internal.smigorx.eu
           provider: !KeyOf nextcloud-provider
+
+  # Uptime Kuma has no OIDC of its own, so unlike every other entry in this
+  # ConfigMap this is a proxy provider rather than an OAuth2 one: Traefik asks
+  # Authentik about each request before it reaches the app.
+  #
+  # forward_domain, not forward_single. Single-application mode requires
+  # /outpost.goauthentik.io/* to be reachable on the application's own host,
+  # which under k3s would need an ExternalName Service that Traefik refuses to
+  # route by default. Domain level keeps the round trip on the Authentik host
+  # and sets one cookie for the whole k8s.internal.smigorx.eu zone, so this
+  # provider is reusable by any other app that cannot authenticate itself.
+  #
+  # No client secret here: Authentik generates one for proxy providers, so
+  # unlike the OAuth2 entries above there is nothing to keep in step with
+  # authentik/values.yaml or Vault.
+  uptime-kuma.yaml: |
+    version: 1
+    metadata:
+      name: Uptime Kuma forward auth application
+    entries:
+      - model: authentik_providers_proxy.proxyprovider
+        id: uptime-kuma-provider
+        identifiers:
+          name: uptime-kuma
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_domain
+          external_host: https://auth.k8s.internal.smigorx.eu
+          cookie_domain: k8s.internal.smigorx.eu
+
+      - model: authentik_core.application
+        identifiers:
+          slug: uptime-kuma
+        attrs:
+          name: Uptime Kuma
+          group: Infrastructure
+          meta_launch_url: https://uptime.k8s.internal.smigorx.eu
+          provider: !KeyOf uptime-kuma-provider
+
+      # The embedded outpost only proxies providers explicitly assigned to it.
+      # This list replaces whatever is there, which is safe only because this
+      # is currently the single proxy provider in the cluster - a second one
+      # must be added to this same list, not to a list of its own.
+      - model: authentik_outposts.outpost
+        identifiers:
+          name: authentik Embedded Outpost
+        attrs:
+          type: proxy
+          providers:
+            - !KeyOf uptime-kuma-provider

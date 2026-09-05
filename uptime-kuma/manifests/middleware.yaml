@@ -1,0 +1,40 @@
+# The first Traefik Middleware in this repo. Uptime Kuma has no OIDC of its
+# own (louislam/uptime-kuma#5589 is still open), so the only way to put it
+# behind Authentik is forward auth: Traefik asks Authentik about every request
+# before it reaches the app.
+#
+# The provider runs in forward_domain ("domain level") mode rather than
+# forward_single. Single-application mode needs /outpost.goauthentik.io/* to
+# be routed to the outpost on *this* host, which would mean an ExternalName
+# Service pointing into the authentik namespace - and k3s starts Traefik
+# without --providers.kubernetescrd.allowExternalNameServices, so that route
+# would silently never work. Domain level mode keeps the whole login round
+# trip on auth.k8s.internal.smigorx.eu, which already exists.
+#
+# Nothing here is specific to Uptime Kuma. Any future app that lacks its own
+# SSO can reuse this by copying the Middleware into its namespace and adding
+# the provider to the same embedded outpost.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: authentik
+  namespace: uptime-kuma
+spec:
+  forwardAuth:
+    # The embedded outpost, served by authentik-server itself - there is no
+    # separate outpost Deployment to run.
+    address: http://authentik-server.authentik.svc.cluster.local/outpost.goauthentik.io/auth/traefik
+
+    # Traefik already sits at the edge, so the X-Forwarded-* it sends are the
+    # real ones and Authentik needs to trust them to build the redirect back.
+    trustForwardHeader: true
+
+    # Passed through to the app. Uptime Kuma ignores them, but they are what
+    # makes this middleware reusable for something that can consume a
+    # trusted-header identity.
+    authResponseHeaders:
+      - X-authentik-username
+      - X-authentik-groups
+      - X-authentik-email
+      - X-authentik-name
+      - X-authentik-uid

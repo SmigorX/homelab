@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma
+spec:
+  replicas: 1
+
+  # ReadWriteOnce on local-path, and the SQLite database underneath does not
+  # tolerate two writers.
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: uptime-kuma
+
+  template:
+    metadata:
+      labels:
+        app: uptime-kuma
+
+    spec:
+      enableServiceLinks: false
+
+      containers:
+        - name: uptime-kuma
+          image: louislam/uptime-kuma:2.5.3
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+
+          ports:
+            - name: http
+              containerPort: 3001
+
+          env:
+            - name: TZ
+              value: Europe/Warsaw
+
+            # Uptime Kuma sits behind Traefik, which terminates TLS. Without
+            # this it builds notification links with the container's own
+            # address instead of the public host.
+            - name: UPTIME_KUMA_PORT
+              value: "3001"
+
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: uptime-kuma-data

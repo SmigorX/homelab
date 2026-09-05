@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: uptime-kuma
+  namespace: uptime-kuma
+  annotations:
+    gethomepage.dev/enabled: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    gethomepage.dev/name: Uptime Kuma
+    gethomepage.dev/description: Service monitoring
+    gethomepage.dev/group: Infrastructure
+    gethomepage.dev/icon: uptime-kuma.png
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+
+    # <namespace>-<middleware name>@kubernetescrd is Traefik's naming for a
+    # Middleware CRD. Getting this wrong fails open - the route simply serves
+    # the app with no authentication - so it is worth checking after any
+    # rename.
+    traefik.ingress.kubernetes.io/router.middlewares: uptime-kuma-authentik@kubernetescrd
+spec:
+  ingressClassName: traefik
+
+  rules:
+    - host: uptime.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: uptime-kuma
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - uptime.k8s.internal.smigorx.eu
+      secretName: uptime-kuma-tls
