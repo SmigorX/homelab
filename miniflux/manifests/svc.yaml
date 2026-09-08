@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: miniflux
+  namespace: miniflux
+spec:
+  selector:
+    app: miniflux
+
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+
+  type: ClusterIP

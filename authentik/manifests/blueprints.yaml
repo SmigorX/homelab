@@ -357,3 +357,51 @@ data:
           type: proxy
           providers:
             - !KeyOf uptime-kuma-provider
+  miniflux.yaml: |
+    version: 1
+    metadata:
+      name: Miniflux OIDC application
+      labels:
+        blueprints.goauthentik.io/description: Miniflux single sign-on configuration
+
+    entries:
+      - model: authentik_providers_oauth2.oauth2provider
+        id: miniflux-provider
+        identifiers:
+          name: miniflux
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+          client_type: confidential
+          client_id: miniflux
+          client_secret: !Env MINIFLUX_OIDC_CLIENT_SECRET
+          grant_types:
+            - authorization_code
+            - refresh_token
+
+          # Miniflux builds this path itself from the provider name, so it is
+          # /oauth2/oidc/callback whatever the application is called here.
+          redirect_uris:
+            - matching_mode: strict
+              url: https://miniflux.k8s.internal.smigorx.eu/oauth2/oidc/callback
+
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+
+      # The slug is load-bearing beyond routing: Authentik serves this
+      # provider's OIDC discovery document at /application/o/<slug>/, which is
+      # exactly what OAUTH2_OIDC_DISCOVERY_ENDPOINT points at. Renaming it
+      # breaks discovery, not just the launch link.
+      - model: authentik_core.application
+        identifiers:
+          slug: miniflux
+        attrs:
+          name: Miniflux
+          group: Applications
+          meta_launch_url: https://miniflux.k8s.internal.smigorx.eu
+          provider: !KeyOf miniflux-provider

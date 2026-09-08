@@ -1,0 +1,28 @@
+# Miniflux keeps *everything* in Postgres - feeds, entries, read state,
+# sessions, API keys - so this Cluster is the only stateful thing in the
+# namespace and there is no PersistentVolumeClaim beside it.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: miniflux-postgres
+  namespace: miniflux
+spec:
+  instances: 1
+
+  bootstrap:
+    initdb:
+      database: miniflux
+      owner: miniflux
+      secret:
+        name: miniflux-postgres-app
+
+  storage:
+    storageClass: local-path-core
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi

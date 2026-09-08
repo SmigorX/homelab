@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: miniflux
+  namespace: miniflux
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: miniflux
+
+  template:
+    metadata:
+      labels:
+        app: miniflux
+
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: miniflux
+          image: miniflux/miniflux:2.3.3
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          ports:
+            - name: http
+              containerPort: 8080
+
+          env:
+            # Miniflux listens on 127.0.0.1:8080 by default, which inside a
+            # pod means the Service answers nothing and every probe fails.
+            - name: LISTEN_ADDR
+              value: 0.0.0.0:8080
+
+            # PostgreSQL
+            #
+            # Assembled from the two secret keys through kubelet's $(VAR)
+            # expansion, because Miniflux takes one connection string rather
+            # than separate host/user/password variables.
+            #
+            # Deliberately the libpq keyword form and not a postgres:// URL:
+            # the password is whatever was put into Vault, and in a URL any
+            # @ : / ? # in it would silently reparse the string into a
+            # different host. Keyword form only cares about spaces and
+            # quotes.
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: miniflux-postgres-app
+                  key: username
+
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: miniflux-postgres-app
+                  key: password
+
+            - name: DATABASE_URL
+              value: host=miniflux-postgres-rw port=5432 user=$(DB_USERNAME) password=$(DB_PASSWORD) dbname=miniflux sslmode=disable
+
+            # Applies the schema on boot. Miniflux ships no separate migration
+            # job, so this has to stay on across upgrades, not just first run.
+            - name: RUN_MIGRATIONS
+              value: "1"
+
+            # Application
+            - name: BASE_URL
+              value: https://miniflux.k8s.internal.smigorx.eu
+
+            # Skipped once the account exists, so it is safe on every restart.
+            # OIDC logins are created as regular users, so this admin is the
+            # only way to reach the settings that matter.
+            - name: CREATE_ADMIN
+              value: "1"
+
+            - name: ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: miniflux-secret
+                  key: ADMIN_USERNAME
+
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: miniflux-secret
+                  key: ADMIN_PASSWORD
+
+            # OIDC / Authentik
+            - name: OAUTH2_PROVIDER
+              value: oidc
+
+            - name: OAUTH2_CLIENT_ID
+              value: miniflux
+
+            - name: OAUTH2_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: miniflux-oidc
+                  key: client-secret
+
+            - name: OAUTH2_REDIRECT_URL
+              value: https://miniflux.k8s.internal.smigorx.eu/oauth2/oidc/callback
+
+            # Issuer URL only. Miniflux's OIDC library appends
+            # /.well-known/openid-configuration itself, and including it here
+            # makes discovery request it twice over and fail.
+            - name: OAUTH2_OIDC_DISCOVERY_ENDPOINT
+              value: https://auth.k8s.internal.smigorx.eu/application/o/miniflux/
+
+            - name: OAUTH2_OIDC_PROVIDER_NAME
+              value: Authentik
+
+            - name: OAUTH2_USER_CREATION
+              value: "1"
+
+          livenessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+
+          readinessProbe:
+            httpGet:
+              path: /healthcheck
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10

@@ -38,6 +38,16 @@ global:
           name: authentik-oidc-secrets
           key: nextcloud-client-secret
 
+    # Add the key to Vault at secret/authentik/oidc and let VSO sync it
+    # BEFORE this lands: a secretKeyRef to a key that is not there yet leaves
+    # both authentik pods in CreateContainerConfigError, which takes SSO down
+    # for every other application here, not just Miniflux.
+    - name: MINIFLUX_OIDC_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-secrets
+          key: miniflux-client-secret
+
 authentik:
   log_level: info
 
