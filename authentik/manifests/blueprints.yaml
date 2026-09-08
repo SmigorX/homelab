@@ -293,6 +293,7 @@ data:
           cookie_domain: k8s.internal.smigorx.eu
 
       - model: authentik_core.application
+        id: uptime-kuma-app
         identifiers:
           slug: uptime-kuma
         attrs:
@@ -300,6 +301,50 @@ data:
           group: Infrastructure
           meta_launch_url: https://uptime.k8s.internal.smigorx.eu
           provider: !KeyOf uptime-kuma-provider
+
+          # Already the model default, but the bindings below are only an
+          # allow-list under "any". Flipped to "all" - which the UI offers as
+          # a dropdown on the application - they would instead demand
+          # membership of both groups at once, and nobody is in both.
+          policy_engine_mode: any
+
+      # Created by hand in the UI, and declared here so that the membership
+      # deciding who reaches Uptime Kuma is visible in Git. The user itself
+      # stays hand-made on purpose: declaring it would put a password in the
+      # repo, so this !Find fails the blueprint if the account is ever
+      # renamed or deleted.
+      #
+      # Like the outpost provider list below, this replaces the membership
+      # rather than adding to it - a guest added through the web interface is
+      # removed on the next reconcile, so new ones belong in this list.
+      - model: authentik_core.group
+        identifiers:
+          name: guests
+        attrs:
+          users:
+            - !Find [authentik_core.user, [username, Gruzin]]
+
+      # Until these existed the application had no bindings at all, and an
+      # application without bindings is open to every authenticated user:
+      # forward auth proved only that someone had logged in to Authentik,
+      # never that they were entitled to this app in particular. Admins are
+      # bound explicitly because that default is now gone - a superuser gets
+      # no implicit pass.
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf uptime-kuma-app
+          group: !Find [authentik_core.group, [name, guests]]
+          order: 0
+        attrs:
+          enabled: true
+
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf uptime-kuma-app
+          group: !Find [authentik_core.group, [name, "authentik Admins"]]
+          order: 1
+        attrs:
+          enabled: true
 
       # The embedded outpost only proxies providers explicitly assigned to it.
       # This list replaces whatever is there, which is safe only because this

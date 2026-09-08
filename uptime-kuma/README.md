@@ -15,13 +15,33 @@ that SSO happened.
 [issue]: https://github.com/louislam/uptime-kuma/issues/5589
 
 This is the first `Middleware` in this repo, and the first proxy provider in
-`authentik/manifests/blueprints.yaml`. Three pieces have to agree:
+`authentik/manifests/blueprints.yaml`. Four pieces have to agree:
 
 | Piece | Where |
 | --- | --- |
 | Proxy provider + application + outpost assignment | `authentik/manifests/blueprints.yaml`, key `uptime-kuma.yaml` |
 | `forwardAuth` middleware | `manifests/middleware.yaml` |
 | Router annotation pointing at it | `manifests/ingress.yaml` |
+| Group allow-list | `authentik/manifests/blueprints.yaml`, same key |
+
+### Who gets in
+
+Two groups are bound to the application: `guests` and `authentik Admins`. The
+application's policy engine mode is `any`, so they read as *or* — membership
+of either is enough.
+
+Those bindings are what makes access a decision. An Authentik application with
+no bindings at all is reachable by **every** authenticated user, which is what
+this was until they were added: forward auth proved that somebody had logged
+in, never that they were entitled to Uptime Kuma. So the first binding
+*narrowed* access rather than widening it, and a set of bindings that names no
+group of yours locks you out along with everyone else. Admins are listed
+explicitly for that reason — being a superuser grants no implicit pass.
+
+`guests` and its membership are declared in the blueprint, so a member added
+through the web interface is dropped on the next reconcile; new guests belong
+in that list. The accounts themselves stay hand-made, since declaring one
+would put a password in Git.
 
 ### Why domain level, not single application
 
@@ -71,6 +91,10 @@ Open `https://uptime.k8s.internal.smigorx.eu`. Authentik authenticates you
 first, then Uptime Kuma shows its own setup screen and asks for an admin user
 and password — the two logins are independent, and at this point you are
 holding both.
+
+Note that Uptime Kuma has a single account rather than one per person, so
+letting a second individual in means either sharing that password or turning
+its own login off. Authentik knows who they are; Uptime Kuma never does.
 
 Uptime Kuma's built-in login can then be turned off under **Settings →
 Security → Disable Auth**, which makes SSO seamless. That is a real trade:
