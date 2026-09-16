@@ -1,0 +1,32 @@
+# Binds to the static PersistentVolume in pv.yaml. storageClassName is the
+# empty string and volumeName is explicit, so this claim can only ever bind to
+# that one volume and never triggers dynamic provisioning.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-library
+  namespace: immich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: immich-library
+  resources:
+    requests:
+      storage: 2Ti
+---
+# CLIP and facial-recognition models. Regenerable - it is a cache - but a slow
+# and bandwidth-hungry one, so it goes on the bulk pool rather than staying the
+# chart's default emptyDir.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: immich-ml-cache
+  namespace: immich
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path-bulk
+  resources:
+    requests:
+      storage: 10Gi

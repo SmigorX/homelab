@@ -1,0 +1,55 @@
+# Unlike the other four Clusters in this repo, this one does not run the stock
+# CloudNativePG image. Immich stores its face and CLIP embeddings in VectorChord
+# indexes, which needs vchord.so in shared_preload_libraries - something no
+# stock operand image ships. This is the CNPG operand image with VectorChord and
+# pgvector built in; the tag pins the PostgreSQL minor and the VectorChord
+# version together, which is why it is preferred over CNPG's declarative
+# extension images (those float the two independently).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: immich-postgres
+  namespace: immich
+spec:
+  instances: 1
+
+  imageName: ghcr.io/tensorchord/cloudnative-vectorchord:18.6-1.1.1
+
+  postgresql:
+    shared_preload_libraries:
+      - vchord.so
+
+  bootstrap:
+    initdb:
+      database: immich
+      owner: immich
+      secret:
+        name: immich-postgres-app
+
+      # Runs as a superuser against the immich database, once, at bootstrap.
+      #
+      # The SUPERUSER grant is what Immich's own documentation asks for, and it
+      # is needed three times over: pg_dump --clean emits DROP EXTENSION, which
+      # a mere database owner may not execute; Immich runs ALTER EXTENSION
+      # vchord UPDATE and REINDEX itself whenever VectorChord moves; and cube /
+      # earthdistance cannot be created by an unprivileged role. The cost is
+      # nothing here - one database, one tenant, and the pod already holds the
+      # password.
+      #
+      # CASCADE pulls in the dependencies: vector for vchord, cube for
+      # earthdistance.
+      postInitApplicationSQL:
+        - ALTER ROLE "immich" SUPERUSER;
+        - CREATE EXTENSION IF NOT EXISTS vchord CASCADE;
+        - CREATE EXTENSION IF NOT EXISTS earthdistance CASCADE;
+
+  storage:
+    storageClass: local-path-core
+    size: 50Gi
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      memory: 4Gi

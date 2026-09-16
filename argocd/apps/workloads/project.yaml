@@ -10,6 +10,10 @@ spec:
   sourceRepos:
     - git@github.com:SmigorX/homelab.git
     - https://jameswynn.github.io/helm-charts
+    # OCI registry, so no oci:// prefix and no chart name - the chart goes in
+    # the Application's `chart:` field. Same shape as the rancher entry in
+    # argocd/apps/storage/project.yaml.
+    - ghcr.io/immich-app/immich-charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"

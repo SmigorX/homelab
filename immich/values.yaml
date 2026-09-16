@@ -1,0 +1,114 @@
+# Values for the official Immich chart, deployed by
+# argocd/apps/workloads/immich.yaml. See README.md for the parts of this that
+# are not obvious - especially why the server is switched off during a restore.
+#
+# Only overrides belong here. The chart's own values.yaml is the reference:
+# https://github.com/immich-app/immich-charts/blob/main/charts/immich/values.yaml
+
+# Shared by every component. The chart merges each component's own block over
+# this one, so anything a component sets itself still wins.
+controllers:
+  main:
+    # The chart hardcodes RollingUpdate. ReadWriteOnce places no restriction on
+    # a second pod on the *same* node, so without this every upgrade would
+    # briefly run two Immich servers against one library and one database.
+    strategy: Recreate
+
+    containers:
+      main:
+        image:
+          # The chart does not track Immich releases, so this is pinned here
+          # rather than inherited from the chart's appVersion (v3.0.0).
+          #
+          # Deliberately the version the Docker install ran, not the newest:
+          # the restored database is a 2.7.4 schema, and 3.0 is the release
+          # that dropped pgvecto.rs support. Restoring onto the version the
+          # dump came from keeps the platform move and an Immich major upgrade
+          # out of the same change window. Bump to v3.0.0 in its own commit
+          # once the library and albums are confirmed intact - see README.md.
+          tag: v2.7.4
+
+        env:
+          # Immich resolves storage template dates with this. Changing it later
+          # changes the folder layout of newly ingested assets, not old ones.
+          TZ: Europe/Warsaw
+
+          # PostgreSQL
+          #
+          # CloudNativePG publishes the primary as <cluster>-rw. Host, user and
+          # database name are literals: because we supply the bootstrap secret
+          # ourselves, CNPG does not add host/dbname keys to it.
+          DB_HOSTNAME: immich-postgres-rw
+          DB_USERNAME: immich
+          DB_DATABASE_NAME: immich
+          DB_PASSWORD:
+            valueFrom:
+              secretKeyRef:
+                name: immich-postgres-app
+                key: password
+
+immich:
+  persistence:
+    library:
+      # The photo library, mounted in place from the host directory Docker used
+      # - see manifests/pv.yaml. The chart refuses to render without this.
+      existingClaim: immich-library
+
+  # Deliberately empty. Setting it injects IMMICH_CONFIG_FILE, at which point
+  # Immich stops reading system settings from the database - the ones the
+  # restore brings across - and the admin settings UI turns read-only.
+  configuration: {}
+
+valkey:
+  # Off by default in the chart. Immich needs it for its job queues; the queues
+  # are disposable, so the chart's emptyDir is left alone.
+  enabled: true
+
+server:
+  # MIGRATION: off until the database dump has been restored. Immich must never
+  # connect to the fresh database first - its migrations create the tables and
+  # vchordrq indexes that the dump's DROP EXTENSION then cannot get past, and
+  # the restore aborts as a whole. Flip to true in its own commit, after the
+  # restore. Scaling the Deployment by hand does not work: Argo CD self-heals
+  # it back within seconds.
+  enabled: false
+
+  controllers:
+    main:
+      containers:
+        main:
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+
+  ingress:
+    # The chart's ingress carries nginx annotations and is useless behind
+    # Traefik. manifests/ingress.yaml is the real one.
+    main:
+      enabled: false
+
+machine-learning:
+  controllers:
+    main:
+      containers:
+        main:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 1Gi
+            limits:
+              cpu: "4"
+              # Model loading is the memory floor here, not the request.
+              memory: 6Gi
+
+  persistence:
+    cache:
+      # The chart defaults to emptyDir, which re-downloads ~2Gi of CLIP and
+      # face-recognition models on every restart - a regression from the named
+      # volume the Docker install had.
+      type: persistentVolumeClaim
+      existingClaim: immich-ml-cache

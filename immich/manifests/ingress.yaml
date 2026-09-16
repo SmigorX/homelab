@@ -1,0 +1,35 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: immich
+  namespace: immich
+  annotations:
+    gethomepage.dev/enabled: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    gethomepage.dev/name: Immich
+    gethomepage.dev/description: Photos and videos
+    gethomepage.dev/group: Media Management
+    gethomepage.dev/icon: immich.png
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+spec:
+  ingressClassName: traefik
+
+  rules:
+    # immich-server, not immich: the chart sets nameOverride: server on the
+    # server component, so that is the Service it creates.
+    - host: immich.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: immich-server
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - immich.k8s.internal.smigorx.eu
+      secretName: immich-tls

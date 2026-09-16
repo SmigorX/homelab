@@ -1,0 +1,48 @@
+# The photo library, mounted in place: this is the very directory the Docker
+# install used as UPLOAD_LOCATION, not a copy of it. Nothing was moved, so a
+# rollback to Docker needs only for this pod to stop.
+#
+# A static PersistentVolume rather than samba's raw hostPath because the Immich
+# chart refuses to render without immich.persistence.library.existingClaim, and
+# rather than a local-path PVC because that would provision an empty directory
+# under /mnt/nas/bulk/k3s and serve nothing, with no error to say so.
+#
+# This is the only PersistentVolume in this repo.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: immich-library
+spec:
+  # hostPath enforces no quota; this number only has to be >= the PVC's request
+  # for the two to bind.
+  capacity:
+    storage: 2Ti
+
+  accessModes:
+    - ReadWriteOnce
+
+  # Deleting the PVC must never delete the photos. Retain also means a rebuild
+  # leaves this PV Released and needing its claimRef cleared by hand - the
+  # correct trade in this direction.
+  persistentVolumeReclaimPolicy: Retain
+
+  volumeMode: Filesystem
+
+  # Empty string, not omitted: there is no default StorageClass in this cluster,
+  # and this says explicitly that no provisioner may touch this volume.
+  storageClassName: ""
+
+  # Pre-bound, so no other claim in any namespace can take it.
+  claimRef:
+    namespace: immich
+    name: immich-library
+
+  hostPath:
+    # UPLOAD_LOCATION from the Docker compose file, mounted there as /data.
+    # Note this is the core pool, not bulk: the library predates this repo and
+    # lives beside /mnt/nas/core/SMB rather than under a k3s-managed path.
+    path: /mnt/nas/core/immich_library
+    # Load-bearing. Without it, a pod starting while /mnt/nas is not mounted
+    # makes the kubelet *create* this path, and Immich boots onto an empty
+    # library. With it the pod stays in ContainerCreating and nothing is lost.
+    type: Directory

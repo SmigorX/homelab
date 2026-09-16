@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: immich
+  namespace: argocd
+spec:
+  project: workloads
+
+  # Three sources, following argocd/apps/system/metallb.yaml: the chart, the
+  # repo as a values root for it, and the repo again for the manifests the
+  # chart does not provide (the library volume, PostgreSQL, the secret and the
+  # Ingress).
+  sources:
+    - repoURL: ghcr.io/immich-app/immich-charts
+      chart: immich
+      targetRevision: 0.13.1
+      helm:
+        releaseName: immich
+        valueFiles:
+          - $values/immich/values.yaml
+    - repoURL: git@github.com:SmigorX/homelab.git
+      targetRevision: master
+      ref: values
+    - repoURL: git@github.com:SmigorX/homelab.git
+      targetRevision: master
+      path: immich/manifests
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: immich
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
