@@ -65,14 +65,6 @@ valkey:
   enabled: true
 
 server:
-  # MIGRATION: off until the database dump has been restored. Immich must never
-  # connect to the fresh database first - its migrations create the tables and
-  # vchordrq indexes that the dump's DROP EXTENSION then cannot get past, and
-  # the restore aborts as a whole. Flip to true in its own commit, after the
-  # restore. Scaling the Deployment by hand does not work: Argo CD self-heals
-  # it back within seconds.
-  enabled: false
-
   controllers:
     main:
       containers:
