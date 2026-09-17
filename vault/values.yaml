@@ -30,6 +30,24 @@ server:
   #     memory: 256Mi
   #     cpu: 250m
 
+  # The chart's default readiness probe execs `vault status`, which exits
+  # non-zero on a sealed Vault. That is defensible in an HA cluster, where a
+  # sealed node should be taken out of rotation so the others serve. Here there
+  # is exactly one node, and taking it out of rotation only makes the web UI
+  # unreachable - which is the one thing needed to unseal it. Vault reseals on
+  # every pod restart, so that happens often enough to matter.
+  #
+  # Switching to the http path turns the probe into a question about the
+  # process rather than the seal: sealedcode and uninitcode remap those two
+  # states onto 204, which a probe counts as success. A Vault that cannot
+  # answer at all still fails, which is what the probe is for.
+  #
+  # The cost is a lost signal: `kubectl get pods` now reports 1/1 for a sealed
+  # Vault. Ask Vault instead - `kubectl -n vault exec vault-0 -- vault status`.
+  readinessProbe:
+    enabled: true
+    path: "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"
+
   # Ingress allows ingress services to be created to allow external access
   # from Kubernetes to access Vault pods.
   ingress:

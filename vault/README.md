@@ -15,8 +15,8 @@ auto-unseal is configured, which matters operationally — see below.
 
 None of this can be automated safely: `vault operator init` prints the root
 token and unseal keys exactly once, and you're the only one who should see
-them. Do this after `vault-0` is `Running` (it starts sealed and will fail
-its readiness check until unsealed — that's expected):
+them. Do this after `vault-0` is `Running` (it starts sealed, which the
+readiness probe deliberately tolerates — see the last section):
 
 ```
 kubectl -n vault exec -it vault-0 -- vault operator init
@@ -109,6 +109,49 @@ populated from Vault, kept in sync every `refreshAfter`.
 
 Served at `https://vault.k8s.internal.smigorx.eu`, same Traefik + cert-manager
 + homepage pattern as everything else in this repo, TLS terminated at the
-ingress with a plain-HTTP backend (`global.tlsDisable: true`). The Vault UI
-(`ui.enabled: true`) is reachable there too. None of this is needed for the
-bootstrap steps above — `kubectl exec` works before the ingress exists.
+ingress with a plain-HTTP backend (`global.tlsDisable: true`). The Vault UI is
+reachable there too — it is switched on by `ui = true` inside the standalone
+HCL config, not by the chart's `ui.enabled`, which stays `false` because it
+governs a separate LoadBalancer Service this cluster does not need. None of
+this is required for the bootstrap steps above: `kubectl exec` works before the
+ingress exists.
+
+## A sealed Vault still reports ready
+
+`values.yaml` replaces the chart's default readiness probe. The default execs
+`vault status`, which exits non-zero while Vault is sealed, so the pod goes
+`0/1` and drops out of its Service. In a real HA cluster that is right: a
+sealed node should stop taking traffic so its peers serve instead. Here there
+are no peers, so the only effect is that the web UI — the one thing that can
+unseal it — goes away exactly when it is needed.
+
+The replacement asks Vault over HTTP instead, and remaps the two states that
+are not faults:
+
+    /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
+
+Vault answers `503` when sealed and `501` when uninitialized; the query
+parameters turn both into `204`, which a kubelet probe counts as success. A
+Vault that cannot answer at all still fails the probe, which is what a
+readiness probe is actually for.
+
+**This costs a signal.** `kubectl get pods` now shows `1/1` for a sealed Vault,
+so it no longer tells you the seal state. Ask Vault directly:
+
+    kubectl -n vault exec vault-0 -- vault status
+
+Applying it needs a manual pod delete. `updateStrategyType: OnDelete` means a
+values change does not roll the StatefulSet, so the running pod keeps the old
+probe until you replace it:
+
+    kubectl -n vault delete pod vault-0
+
+That restart reseals Vault, which makes it its own test: the new pod should
+come up `1/1` while still sealed, and the web UI should answer, at which point
+unsealing through the browser is the thing this change existed to allow.
+
+Worth knowing: `server.service.publishNotReadyAddresses` is `true` in this
+chart by default, and the EndpointSlice controller forces an endpoint's `ready`
+condition to `true` whenever that is set. So routing to a sealed Vault was
+arguably supposed to work already. The probe change makes it not depend on
+that, and makes `kubectl` agree with what the Service is doing either way.
