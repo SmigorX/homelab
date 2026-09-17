@@ -405,3 +405,58 @@ data:
           group: Applications
           meta_launch_url: https://miniflux.k8s.internal.smigorx.eu
           provider: !KeyOf miniflux-provider
+
+  immich.yaml: |
+    version: 1
+    metadata:
+      name: Immich OIDC application
+      labels:
+        blueprints.goauthentik.io/description: Immich single sign-on configuration
+
+    entries:
+      - model: authentik_providers_oauth2.oauth2provider
+        id: immich-provider
+        identifiers:
+          name: immich
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+          client_type: confidential
+          client_id: immich
+          client_secret: !Env IMMICH_OIDC_CLIENT_SECRET
+          grant_types:
+            - authorization_code
+            - refresh_token
+
+          # Three, and the custom scheme is not optional: the Android and iOS
+          # apps return through app.immich:///oauth-callback and nothing else.
+          # Note the three slashes - an empty authority - which is what the app
+          # actually sends. /user-settings is for linking an existing Immich
+          # account to an Authentik one by hand, which is the escape hatch when
+          # the email addresses do not line up.
+          redirect_uris:
+            - matching_mode: strict
+              url: app.immich:///oauth-callback
+            - matching_mode: strict
+              url: https://immich.k8s.internal.smigorx.eu/auth/login
+            - matching_mode: strict
+              url: https://immich.k8s.internal.smigorx.eu/user-settings
+
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+
+      # Immich reads the discovery document at /application/o/<slug>/, so the
+      # slug is what goes into the issuer URL in Immich's own settings.
+      - model: authentik_core.application
+        identifiers:
+          slug: immich
+        attrs:
+          name: Immich
+          group: Media Management
+          meta_launch_url: https://immich.k8s.internal.smigorx.eu
+          provider: !KeyOf immich-provider

@@ -247,23 +247,78 @@ the PV retains.
 
 ## Single sign-on
 
-Immich is not an Authentik OAuth2 client here. Its OAuth settings live in the
-database, configured through **Administration → Settings**, not in environment
-variables, so there is nothing this repo can declare. The chart does offer
-`immich.configuration`, which renders the whole of `immich-config.json` and sets
-`IMMICH_CONFIG_FILE` — but that would put the client secret in Git, freeze the
-admin settings UI read-only, and override the settings the restore just brought
-back. It is left empty for those reasons.
+**Half of this is declarative and half of it is not**, which is unlike every
+other application here. The Authentik side is a blueprint like any other. The
+Immich side is not: OAuth settings live in Immich's database, configured through
+**Administration → Settings**, and there are no environment variables for them.
 
-If SSO is wanted later it needs an `immich.yaml` blueprint in
-`authentik/manifests/blueprints.yaml`, an `IMMICH_OIDC_CLIENT_SECRET` entry in
-`authentik/values.yaml`, and `vault kv patch secret/authentik/oidc
-immich-client-secret=…` — patch rather than put, since that path already holds
-five other applications' secrets. Immich needs three redirect URIs registered:
-`https://immich.k8s.internal.smigorx.eu/auth/login`,
-`https://immich.k8s.internal.smigorx.eu/user-settings`, and
-`app.immich:///oauth-callback` for the mobile app. Enabling it would still be a
-click in Immich's own settings.
+The chart does offer `immich.configuration`, which would render the whole of
+`immich-config.json` and set `IMMICH_CONFIG_FILE`. Taking it would put the
+client secret in Git, turn the entire admin settings UI read-only — not just the
+OAuth part — and override the settings the restore brought across. It stays
+empty, and OAuth stays a handful of fields typed into the web interface.
 
-Forward auth, the way Uptime Kuma does it, is not an option: it would break the
-mobile app and the API along with it.
+So the client secret has exactly one home, `secret/authentik/oidc`, and nothing
+machine-reads the Immich end of it. Read it back when you need it:
+
+    kubectl -n vault exec -it vault-0 -- vault kv get -field=immich-client-secret secret/authentik/oidc
+
+`vault kv patch`, never `put` — that path holds five other applications'
+secrets, and `put` replaces a path wholesale.
+
+### What to type into Immich
+
+| Field | Value |
+| --- | --- |
+| Issuer URL | `https://auth.k8s.internal.smigorx.eu/application/o/immich/` |
+| Client ID | `immich` |
+| Client Secret | from the command above |
+| Scope | `openid email profile` (the default) |
+
+### Three redirect URIs, and the odd one matters
+
+The blueprint registers `app.immich:///oauth-callback` alongside the two web
+ones. Three slashes, not two: the scheme has an empty authority, and that is
+what the mobile app actually sends. Without it the Android and iOS apps cannot
+complete a login at all — the browser opens, Authentik authenticates, and the
+app never hears back.
+
+Authentik accepts custom schemes, so no workaround is needed here. If a future
+provider refuses them, Immich ships a route at `/api/oauth/mobile-redirect` that
+forwards to the custom scheme; pointing **Mobile Redirect URI Override** at
+`https://immich.k8s.internal.smigorx.eu/api/oauth/mobile-redirect` and
+registering that https URL instead achieves the same thing.
+
+`/user-settings` is the third URI. It is what links an already-existing Immich
+account to an Authentik one by hand, and it is the escape hatch for the trap
+below.
+
+### Auto Register will happily give you a second, empty Immich
+
+Immich matches an OAuth login to an existing account **by email address**. This
+instance has one account, carried over from the Docker install. If the address
+in Authentik differs from it at all, `Auto Register` — on by default — creates a
+brand new user with an empty library, and the first impression is that every
+photo is gone.
+
+Nothing is gone in that case; you are simply logged in as somebody else. Still,
+line the addresses up before the first OAuth login, or link the accounts
+manually from `/user-settings` while signed in locally, or turn Auto Register
+off until the first login has proved itself.
+
+### Local login stays enabled
+
+Immich can hide its password form entirely. Leaving it on costs a second way in
+and removes a hole: Authentik is one deployment and Vault re-seals itself on
+every pod restart, so an admin account that does not depend on either is worth
+keeping. Same trade as [miniflux/README.md](../miniflux/README.md) documents.
+
+Forward auth, the way Uptime Kuma does it, is not an option here. It would
+authenticate the browser and break the mobile app and the API in the same move.
+
+### On the home network only
+
+`auth.k8s.internal.smigorx.eu` resolves on the LAN. OAuth from the phone works
+at home or over a VPN, which is no worse than today — the app already talks to
+`immich.k8s.internal` — but it does mean Authentik has to be reachable wherever
+Immich is, if Immich is ever published more widely.

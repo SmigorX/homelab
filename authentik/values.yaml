@@ -48,6 +48,12 @@ global:
           name: authentik-oidc-secrets
           key: miniflux-client-secret
 
+    - name: IMMICH_OIDC_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-secrets
+          key: immich-client-secret
+
 authentik:
   log_level: info
 
