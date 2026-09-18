@@ -54,6 +54,14 @@ applications, and `put` replaces a path wholesale. A `secretKeyRef` to a key
 that does not exist yet leaves both Authentik pods in
 `CreateContainerConfigError`, which takes SSO down for everything here.
 
+`admin` cannot be the admin username. Forgejo reserves it, along with `api`,
+`explore`, `user`, `new`, `login` and everything else that would collide with a
+top-level route, and the init container fails with `CreateUser: name is
+reserved` rather than falling back to anything. It retries every few seconds,
+so correcting the Vault key is enough — but the pod is in CrashLoopBackOff by
+then, and its retry backoff is what decides how long you wait. Delete the pod
+to skip it.
+
 ### Why the admin password is not the chart's
 
 Left to itself the chart generates one through bitnami's
