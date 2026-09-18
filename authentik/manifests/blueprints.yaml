@@ -460,3 +460,52 @@ data:
           group: Media Management
           meta_launch_url: https://immich.k8s.internal.smigorx.eu
           provider: !KeyOf immich-provider
+
+  forgejo.yaml: |
+    version: 1
+    metadata:
+      name: Forgejo OIDC application
+      labels:
+        blueprints.goauthentik.io/description: Forgejo single sign-on configuration
+
+    entries:
+      - model: authentik_providers_oauth2.oauth2provider
+        id: forgejo-provider
+        identifiers:
+          name: forgejo
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+          client_type: confidential
+          client_id: forgejo
+          client_secret: !Env FORGEJO_OIDC_CLIENT_SECRET
+          grant_types:
+            - authorization_code
+            - refresh_token
+
+          # Forgejo builds this from the name of the authentication source,
+          # which forgejo/values.yaml calls `authentik`. Renaming the source
+          # there changes this URL.
+          redirect_uris:
+            - matching_mode: strict
+              url: https://forgejo.k8s.internal.smigorx.eu/user/oauth2/authentik/callback
+
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+
+      # The slug is load-bearing beyond routing: the discovery document
+      # forgejo/values.yaml points `autoDiscoverUrl` at is served at
+      # /application/o/<slug>/.well-known/openid-configuration.
+      - model: authentik_core.application
+        identifiers:
+          slug: forgejo
+        attrs:
+          name: Forgejo
+          group: Applications
+          meta_launch_url: https://forgejo.k8s.internal.smigorx.eu
+          provider: !KeyOf forgejo-provider

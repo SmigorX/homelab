@@ -1,0 +1,160 @@
+# Values for the Forgejo Helm chart, deployed by
+# argocd/apps/workloads/forgejo.yaml. See README.md for the parts of this that
+# are not obvious - especially why ingress.tls is load-bearing and why the
+# admin password comes from Vault rather than from the chart.
+#
+# Only overrides belong here. The chart's own values.yaml is the reference:
+# https://code.forgejo.org/forgejo-helm/forgejo-helm/src/branch/main/values.yaml
+
+# The hardening block the chart ships commented out. It holds only because
+# image.rootless keeps its default of true: uid/gid 1000 is that image's `git`
+# user, and the chart mounts an emptyDir over /tmp, which is the only path
+# outside /data the container writes to.
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  privileged: false
+  readOnlyRootFilesystem: true
+  runAsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+service:
+  ssh:
+    # Git over SSH has to reach the LAN and Traefik only forwards HTTP(S), so
+    # this gets its own address. The MetalLB pool is autoAssign: false, so the
+    # address is requested by annotation exactly as samba/manifests/svc.yaml
+    # does; .11 is Traefik, .12 samba, .13 mosquitto.
+    type: LoadBalancer
+    annotations:
+      metallb.universe.tf/address-pool: ingress
+      metallb.universe.tf/loadBalancerIPs: 192.168.1.14
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+    gethomepage.dev/enabled: "true"
+    gethomepage.dev/name: Forgejo
+    gethomepage.dev/description: Git forge
+    gethomepage.dev/group: Applications
+    gethomepage.dev/icon: forgejo.png
+  hosts:
+    - host: forgejo.k8s.internal.smigorx.eu
+      paths:
+        - path: /
+          pathType: Prefix
+          port: http
+  # This is not only about the certificate. The chart derives ROOT_URL from the
+  # ingress, and its `gitea.public_protocol` helper returns https only when this
+  # list is non-empty. Leave it empty and Forgejo hands out http:// clone URLs,
+  # webhook targets, e-mail links and OAuth redirect URIs.
+  tls:
+    - hosts:
+        - forgejo.k8s.internal.smigorx.eu
+      secretName: forgejo-tls
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    memory: 2Gi
+
+persistence:
+  # Repositories, LFS objects, packages and the generated app.ini - everything
+  # except the database.
+  #
+  # Without storageClass the claim binds to k3s's built-in `local-path`, which
+  # is node-local and reclaimPolicy Delete. local-path-core is the NAS-backed
+  # Retain class the rest of this repo uses.
+  storageClass: local-path-core
+  # The chart's default is the gitea-era `gitea-shared-storage`. Worth settling
+  # before the first sync: the PVC carries helm.sh/resource-policy: keep, so
+  # renaming it later leaves the data behind in the old claim.
+  claimName: forgejo-data
+  size: 20Gi
+
+# Off, but kept here rather than deleted: signed internal Git activity is wanted
+# eventually, and this is where the key gets pointed at.
+signing:
+  enabled: false
+
+gitea:
+  admin:
+    # Without this the chart generates the password through bitnami's
+    # common.secrets.passwords.manage, which preserves the existing one by
+    # calling `lookup`. Argo CD renders with `helm template` and no cluster
+    # access, so lookup comes back empty and every render produces a different
+    # password: the Secret never matches, selfHeal rewrites it, and
+    # passwordMode keepUpdated resets the account on every pod start.
+    existingSecret: forgejo-admin
+    # Read only when the account is first created. Use the address of the
+    # Authentik account that should end up owning it - ACCOUNT_LINKING below
+    # matches on e-mail.
+    email: contact@smigorx.eu
+
+  # Off, but kept rather than deleted: nothing scrapes Prometheus metrics in
+  # this cluster yet, and this is the switch for when something does.
+  metrics:
+    enabled: false
+
+  oauth:
+    # Reconciled on every pod start: the init container runs `gitea admin auth
+    # add-oauth`, or update-oauth when a source of this name already exists.
+    # The name is load-bearing - the callback Authentik has to allow is
+    # /user/oauth2/<name>/callback.
+    - name: authentik
+      provider: openidConnect
+      # Forgejo wants the full well-known URL here. Miniflux, confusingly,
+      # wants the issuer only and appends the rest itself.
+      autoDiscoverUrl: https://auth.k8s.internal.smigorx.eu/application/o/forgejo/.well-known/openid-configuration
+      # Keys `key` (the client id) and `secret`; both names are the chart's.
+      existingSecret: forgejo-oidc
+
+  additionalConfigFromEnvs:
+    # The database password, which cannot go in the config below because that
+    # is rendered into a Secret straight from this file. environment-to-ini
+    # merges FORGEJO__* into app.ini in the init container.
+    - name: FORGEJO__DATABASE__PASSWD
+      valueFrom:
+        secretKeyRef:
+          name: forgejo-postgres-app
+          key: password
+
+  config:
+    server:
+      # SSH_DOMAIN otherwise follows DOMAIN, which resolves to Traefik on .11
+      # where nothing listens on 22. This is the host the UI prints in clone
+      # commands, so it has to be the address the ssh Service holds.
+      SSH_DOMAIN: 192.168.1.14
+
+    database:
+      DB_TYPE: postgres
+      HOST: forgejo-postgres-rw:5432
+      NAME: forgejo
+      USER: forgejo
+      SSL_MODE: disable
+
+    service:
+      # Not DISABLE_REGISTRATION, which would also block the OAuth2 account
+      # creation below. This hides the local signup form, leaving Authentik as
+      # the only way to get an account; existing local logins, the admin user
+      # included, keep working.
+      ALLOW_ONLY_EXTERNAL_REGISTRATION: true
+
+    openid:
+      # OpenID 2.0, a different protocol from the OIDC above and unused here.
+      ENABLE_OPENID_SIGNIN: false
+
+    oauth2_client:
+      ENABLE_AUTO_REGISTRATION: true
+      # Matches an incoming Authentik identity against an existing local account
+      # by verified e-mail instead of creating a second one.
+      ACCOUNT_LINKING: auto

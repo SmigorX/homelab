@@ -1,0 +1,30 @@
+# Issues, pull requests, users, sessions and OAuth sources live here; the Git
+# repositories themselves, LFS objects and packages live on the forgejo-data
+# PVC the chart creates. Both have to be backed up to restore this namespace.
+#
+# Stock operand image: unlike Immich, Forgejo asks for no extensions.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: forgejo-postgres
+  namespace: forgejo
+spec:
+  instances: 1
+
+  bootstrap:
+    initdb:
+      database: forgejo
+      owner: forgejo
+      secret:
+        name: forgejo-postgres-app
+
+  storage:
+    storageClass: local-path-core
+    size: 10Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi

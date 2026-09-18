@@ -20,6 +20,12 @@ Authentik discovers and reconciles each `.yaml` key as a blueprint.
   `app.immich:///oauth-callback` that the mobile apps return through. See
   [immich/README.md](../immich/README.md).
 
+- **Forgejo** uses OIDC, and unlike Immich the whole client is declarative: the
+  Helm chart reconciles the authentication source on every pod start from
+  `forgejo/values.yaml`. The source is named `authentik` there, which is what
+  makes the single redirect URI `/user/oauth2/authentik/callback`. See
+  [forgejo/README.md](../forgejo/README.md).
+
 Keep Argo CD's local administrator enabled until you have confirmed a browser
 login through Authentik. The OIDC redirect URI is
 `https://argocd.k8s.internal.smigorx.eu/pkce/verify`; changing the external

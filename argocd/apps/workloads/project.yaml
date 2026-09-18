@@ -14,6 +14,7 @@ spec:
     # the Application's `chart:` field. Same shape as the rancher entry in
     # argocd/apps/storage/project.yaml.
     - ghcr.io/immich-app/immich-charts
+    - code.forgejo.org/forgejo-helm
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"

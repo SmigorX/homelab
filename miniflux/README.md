@@ -10,6 +10,12 @@ state, sessions and API keys in Postgres and nothing on local disk, so the
 CloudNativePG `Cluster/miniflux-postgres` (10Gi, `local-path-core`) holds the
 entire installation. Backing that up backs up everything.
 
+That makes subscriptions data rather than configuration. There is no
+declarative import, and the API's `/v1/import` only ever adds feeds, so an
+OPML file in Git would disagree with reality the first time you unsubscribe
+from something. [FEEDS.md](FEEDS.md) keeps a reading list to subscribe to by
+hand; the database backup is what actually preserves them.
+
 `RUN_MIGRATIONS=1` stays set across upgrades rather than only on first run —
 Miniflux ships no separate migration job and applies the schema itself on
 boot.
@@ -32,6 +38,12 @@ all — see [vault/README.md](../vault/README.md).
     vault kv put secret/miniflux/postgres username=miniflux password=…
     vault kv put secret/miniflux/app ADMIN_USERNAME=… ADMIN_PASSWORD=…
     vault kv put secret/miniflux/oidc client-secret=…
+
+`ADMIN_PASSWORD` must be at most **72 bytes**. Miniflux hashes it with
+bcrypt, which refuses anything longer, and the pod then crash-loops on
+`bcrypt: password length exceeds 72 bytes` immediately after the migrations
+run. The `head -c 64 /dev/urandom | base64` idiom used elsewhere in this repo
+yields 88 characters and will not work here — `openssl rand -hex 32` gives 64.
 
 Keep the Postgres password alphanumeric. Miniflux takes a single connection
 string, so `DATABASE_URL` is assembled from those two keys through kubelet's
