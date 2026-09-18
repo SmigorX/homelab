@@ -46,14 +46,62 @@ kubectl -n vault exec -it vault-0 -- sh -c '
   vault auth enable kubernetes &&
   vault write auth/kubernetes/config \
     kubernetes_host="https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT" \
-    kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
-    token_reviewer_jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token
+    kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
 '
 ```
 
 That last write works without any extra RBAC because `server.authDelegator.enabled: true`
 in `values.yaml` already binds the Vault service account to
 `system:auth-delegator`, which is what lets it call the TokenReview API.
+
+### Do not set `token_reviewer_jwt`
+
+It is tempting to add `token_reviewer_jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token`
+to that write, and this repo did until it broke. That file is a *projected*
+token bound to the Vault pod, and Kubernetes invalidates it the moment that
+pod is replaced — but Vault keeps the copy it was given forever. Leave the
+field unset and Vault reads the token from its own filesystem on each request
+instead, which kubelet keeps current across restarts.
+
+The failure this causes is slow and misleading. Vault's TokenReview calls
+start being rejected, which it reports to clients as nothing more specific
+than:
+
+    URL: PUT http://vault.vault.svc.cluster.local:8200/v1/auth/kubernetes/login
+    Code: 403. Errors:
+
+    * permission denied
+
+Nothing breaks at the moment of the restart, because the Vault Secrets
+Operator renews the tokens it already holds — so every existing
+`VaultStaticSecret` keeps syncing while *new* ones fail, and the problem looks
+like it belongs to whichever application was added last. It is not about that
+application, its namespace, or the role's bindings.
+
+To confirm before changing anything, review a token by hand the way Vault
+would. This authenticates even while login is failing, which is the tell:
+
+    REVIEWER=$(kubectl -n vault create token vault --duration=10m)
+    TARGET=$(kubectl -n <namespace> create token default --duration=10m)
+
+    cat > /tmp/tr.json <<EOF
+    {"apiVersion":"authentication.k8s.io/v1","kind":"TokenReview","spec":{"token":"$TARGET"}}
+    EOF
+
+    kubectl --token="$REVIEWER" create --raw \
+      /apis/authentication.k8s.io/v1/tokenreviews -f /tmp/tr.json
+
+`"authenticated": true` there, against a login that answers 403, means the
+credential Vault holds is the broken part rather than anything about the
+namespace, the service account or the role.
+
+The fix is to clear the stored copy. The empty string is required — omitting
+the field leaves the old value in place:
+
+    vault write auth/kubernetes/config \
+      kubernetes_host="https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT" \
+      kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+      token_reviewer_jwt=""
 
 Enable a KV v2 engine and create an example policy + role matching the
 `default` `VaultAuth` that `vault-secrets-operator/values.yaml` declares:
