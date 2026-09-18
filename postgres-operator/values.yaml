@@ -1,0 +1,16 @@
+# Trimmed from the upstream chart defaults: https://github.com/cloudnative-pg/charts/blob/main/charts/cloudnative-pg/values.yaml
+# Anything not listed here just falls back to that file's default.
+
+# The chart declares no resources, which left the operator invisible to the
+# scheduler on a node where CPU *requests*, not CPU usage, are what run out.
+# It reconciles five Clusters and idles at ~9m and 60Mi.
+#
+# No CPU limit, in line with every other workload in this repo: there is one
+# node and no other tenant to protect, so a limit only throttles a burst that
+# has nothing to compete with.
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi

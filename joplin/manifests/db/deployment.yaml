@@ -62,10 +62,9 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: 100m
+              cpu: 50m
               memory: 256Mi
             limits:
-              cpu: "1"
               memory: 1Gi
           volumeMounts:
             - name: data

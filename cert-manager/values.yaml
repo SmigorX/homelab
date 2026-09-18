@@ -4,6 +4,16 @@ crds:
 
 replicaCount: 1
 
+# The chart ships no resources at all. Requests only - no CPU limits anywhere
+# in this cluster, because there is one node and nothing to protect other
+# tenants from.
+resources:
+  requests:
+    cpu: 20m
+    memory: 96Mi
+  limits:
+    memory: 256Mi
+
 podDisruptionBudget:
   enabled: false
 
@@ -17,11 +27,25 @@ cainjector:
   podDisruptionBudget:
     enabled: false
 
+  resources:
+    requests:
+      cpu: 20m
+      memory: 96Mi
+    limits:
+      memory: 256Mi
+
 webhook:
   replicaCount: 1
 
   podDisruptionBudget:
     enabled: false
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
 
 startupapicheck:
   enabled: true

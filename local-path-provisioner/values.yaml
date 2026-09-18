@@ -31,3 +31,11 @@ storageClassConfigs:
       - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
         paths:
           - /mnt/nas/bulk/k3s
+# The chart declares none. The provisioner only wakes up when a PVC needs
+# binding, so this is a floor rather than a working set.
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    memory: 128Mi

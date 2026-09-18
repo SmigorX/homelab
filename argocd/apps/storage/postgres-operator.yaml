@@ -5,13 +5,25 @@ metadata:
   namespace: argocd
 spec:
   project: storage
-  source:
-    repoURL: https://cloudnative-pg.github.io/charts
-    chart: cloudnative-pg
-    targetRevision: "0.29.0"
+
+  # Two sources rather than one: the chart, and the repo as a values root for
+  # it. Same shape as argocd/apps/storage/local-path-provisioner.yaml.
+  sources:
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: cloudnative-pg
+      targetRevision: "0.29.0"
+      helm:
+        releaseName: postgres-operator
+        valueFiles:
+          - $values/postgres-operator/values.yaml
+    - repoURL: git@github.com:SmigorX/homelab.git
+      targetRevision: master
+      ref: values
+
   destination:
     server: https://kubernetes.default.svc
     namespace: postgres-operator
+
   syncPolicy:
     automated:
       prune: true

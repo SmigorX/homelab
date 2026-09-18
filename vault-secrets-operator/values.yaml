@@ -29,3 +29,27 @@ defaultAuthMethod:
     role: default
     serviceAccount: default
 
+# The chart's defaults carry a 500m CPU limit on both containers. Requests are
+# close enough to reality to keep; the limits are the part that does not belong
+# on a single-node cluster, where throttling protects nobody.
+#
+# `cpu: null` rather than simply leaving it out: Helm deep-merges values, so an
+# omitted key keeps the chart's default. Null is what deletes it.
+controller:
+  manager:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: null
+        memory: 128Mi
+
+  kubeRbacProxy:
+    resources:
+      requests:
+        cpu: 5m
+        memory: 64Mi
+      limits:
+        cpu: null
+        memory: 128Mi

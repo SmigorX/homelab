@@ -21,14 +21,14 @@ server:
   # manual unseal, so rollouts should be deliberate either way.
   updateStrategyType: "OnDelete"
 
-  resources: {}
-  # resources:
-  #   requests:
-  #     memory: 256Mi
-  #     cpu: 250m
-  #   limits:
-  #     memory: 256Mi
-  #     cpu: 250m
+  # Idles at ~10m and 57Mi. No CPU limit, in line with the rest of this cluster:
+  # a single node has no other tenant to protect, so a limit only throttles.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
 
   # The chart's default readiness probe execs `vault status`, which exits
   # non-zero on a sealed Vault. That is defensible in an HA cluster, where a

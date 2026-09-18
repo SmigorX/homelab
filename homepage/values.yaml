@@ -85,3 +85,11 @@ persistence:
     enabled: true
     type: emptyDir
     mountPath: /app/config/logs
+# The chart declares none. bjw-s common takes this at the top level and puts it
+# on the single container. No CPU limit, as everywhere else here.
+resources:
+  requests:
+    cpu: 25m
+    memory: 192Mi
+  limits:
+    memory: 512Mi

@@ -64,6 +64,18 @@ valkey:
   # are disposable, so the chart's emptyDir is left alone.
   enabled: true
 
+  # The chart sets none, which left this container invisible to the scheduler.
+  controllers:
+    main:
+      containers:
+        main:
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+
 server:
   controllers:
     main:
@@ -71,10 +83,11 @@ server:
         main:
           resources:
             requests:
-              cpu: 200m
-              memory: 512Mi
+              cpu: 150m
+              # Measured at ~690Mi steady, which was above the old 512Mi
+              # request and therefore an early eviction candidate.
+              memory: 768Mi
             limits:
-              cpu: "2"
               memory: 4Gi
 
   ingress:
@@ -93,7 +106,6 @@ machine-learning:
               cpu: 100m
               memory: 1Gi
             limits:
-              cpu: "4"
               # Model loading is the memory floor here, not the request.
               memory: 6Gi
 
