@@ -1,0 +1,33 @@
+# Traefik HelmChartConfig – overrides for the k3s-managed Traefik deployment.
+#
+# k3s installs Traefik via a HelmChart resource in kube-system. To tweak its
+# values without touching the k3s-managed manifest, you create a
+# HelmChartConfig with the same name ("traefik") in the same namespace.
+# k3s merges these values into its own Helm release on the next reconcile.
+#
+# Problem solved:
+#   Traefik's default readTimeout / writeTimeout (60 s in some builds, 0 in
+#   others) and idleTimeout (180 s) are too short for large Immich video
+#   uploads. The connection gets reset mid-transfer.
+#
+# What this does:
+#   Sets respondingTimeouts on the "websecure" entrypoint to 10 minutes,
+#   which is enough for multi-GB uploads over a home network.
+#
+# Docs:
+#   https://docs.k3s.io/helm#customizing-packaged-components-with-helmchartconfig
+#   https://doc.traefik.io/traefik/routing/entrypoints/#respondingtimeouts
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ports:
+      websecure:
+        transport:
+          respondingTimeouts:
+            readTimeout: 600
+            writeTimeout: 600
+            idleTimeout: 180
