@@ -157,11 +157,17 @@ spec:
             - |
               set -eu
 
-              mkdir -p /etc/wireguard
-              cp /wg/wg0.conf /etc/wireguard/wg0.conf
-              chmod 600 /etc/wireguard/wg0.conf
+              # Not /etc/wireguard: in this image that is a symlink to
+              # /config/wg_confs, a directory only the bypassed s6 init
+              # creates, so mkdir fails on the dangling link. Handing wg-quick
+              # a path instead of a name sidesteps the image's layout; the
+              # interface is still named after the file, so wg0 it stays and
+              # the kill switch's -o wg0 still matches.
+              mkdir -p /run/wireguard
+              cp /wg/wg0.conf /run/wireguard/wg0.conf
+              chmod 600 /run/wireguard/wg0.conf
 
-              wg-quick up wg0
+              wg-quick up /run/wireguard/wg0.conf
 
               # wg-quick returns as soon as the interface is configured; the
               # tunnel is kernel state from then on. Parking here keeps the
