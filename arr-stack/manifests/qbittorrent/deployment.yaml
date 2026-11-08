@@ -1,0 +1,238 @@
+# The only pod in this namespace that touches the VPN, and the whole reason the
+# stack was rebuilt.
+#
+# Under Docker, Gluetun owned a network namespace and every other service
+# joined it with network_mode: service:gluetun. That coupled the entire stack to
+# one container: when Gluetun stopped it stopped publishing its namespace, and
+# Sonarr, Radarr, Prowlarr and the rest went down with it despite none of them
+# needing a VPN. Kubernetes does not need that trick - containers in a pod
+# already share a network namespace - so the tunnel is scoped to this pod alone
+# and every other component talks to qBittorrent over its ordinary Service.
+#
+# The two properties this file has to hold up:
+#
+#   1. qBittorrent never reaches the internet except through wg0. Not when the
+#      tunnel is down, not during startup, not if the Mullvad subscription
+#      lapses. The failure mode is "no connectivity", never "connectivity over
+#      the home IP".
+#
+#   2. qBittorrent's WebUI and API stay reachable regardless of the tunnel, so
+#      Sonarr and Radarr keep working and the UI still opens. This is what the
+#      Docker layout could not do.
+#
+# Those two are reconciled by only ever filtering OUTPUT. Inbound connections
+# and their replies are never touched.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qbittorrent
+  namespace: arr-stack
+spec:
+  replicas: 1
+
+  # ReadWriteOnce config volume, and two qBittorrent processes over one set of
+  # .fastresume files corrupt them.
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: qbittorrent
+
+  template:
+    metadata:
+      labels:
+        app: qbittorrent
+
+    spec:
+      enableServiceLinks: false
+
+      # Cluster DNS is deliberately not used. Resolution has to happen inside
+      # the tunnel - otherwise every tracker hostname qBittorrent looks up is a
+      # plaintext query to CoreDNS and out of the house over the home IP, which
+      # leaks exactly what the tunnel exists to hide.
+      #
+      # This is set at pod level rather than through wg0.conf's DNS= line
+      # because containers in a pod share a network namespace but not a
+      # filesystem: wg-quick rewriting /etc/resolv.conf would only rewrite the
+      # sidecar's copy, never qBittorrent's. dnsConfig is materialised into
+      # every container in the pod.
+      #
+      # Nothing here needs to resolve a cluster Service: traffic to qBittorrent
+      # is inbound, and it never calls the *arr apps back.
+      dnsPolicy: None
+      dnsConfig:
+        nameservers:
+          # Mullvad's resolver, reachable only over the tunnel. Must match the
+          # DNS line of the config generated in the Mullvad portal.
+          - 10.64.0.1
+
+      initContainers:
+        # The kill switch, installed before either real container starts.
+        #
+        # It has to be an initContainer: sibling containers have no defined
+        # start order, so a rule set built by the sidecar would leave a window
+        # in which qBittorrent is running and unfiltered. iptables rules live
+        # in the network namespace, which belongs to the pod sandbox rather
+        # than to any container, so they outlive this container by design.
+        #
+        # Same image as the sidecar on purpose. iptables has two backends
+        # (legacy and nft) writing to two different rule sets; two images could
+        # disagree about which one they mean and the policy would silently not
+        # compose.
+        - name: killswitch
+          image: lscr.io/linuxserver/wireguard:1.0.20260223-r0-ls122
+
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              set -eu
+
+              # Default deny. Everything below is an exception to this line.
+              iptables -P OUTPUT DROP
+
+              iptables -A OUTPUT -o lo -j ACCEPT
+
+              # Replies to inbound connections. This is what keeps the WebUI
+              # and the API answering Sonarr, Radarr and Traefik while the
+              # tunnel is down - their packets leave through eth0, which is
+              # otherwise denied.
+              iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+              # The tunnel itself. Naming an interface that does not exist yet
+              # is allowed - the rule simply never matches until wg-quick
+              # creates wg0, which is precisely the fail-closed behaviour
+              # wanted here.
+              iptables -A OUTPUT -o wg0 -j ACCEPT
+
+              # WireGuard's own encrypted packets to the Mullvad endpoint.
+              # These leave over eth0, not wg0, so without this the tunnel
+              # could never be established at all. Matching the fwmark rather
+              # than the endpoint address keeps the server choice out of this
+              # file: wg-quick tags everything it sends itself with the mark
+              # declared as FwMark in wg0.conf.
+              iptables -A OUTPUT -m mark --mark 51820 -j ACCEPT
+
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+
+      containers:
+        - name: wireguard
+          image: lscr.io/linuxserver/wireguard:1.0.20260223-r0-ls122
+
+          # Not capabilities alone. wg-quick writes
+          # net.ipv4.conf.all.src_valid_mark when the peer's AllowedIPs carry a
+          # default route, and /proc/sys is mounted read-only in an
+          # unprivileged container, so wg-quick aborts. The narrower fix is to
+          # start k3s with
+          # --kubelet-arg=allowed-unsafe-sysctls=net.ipv4.conf.all.src_valid_mark
+          # and declare it in the pod's securityContext - a node-level flag
+          # that this cluster does not set today. See also the same trade in
+          # home-automation/manifests/zigbee2mqtt/deployment.yaml.
+          securityContext:
+            privileged: true
+
+          # The image's own s6 init is bypassed. Left to itself it wants to own
+          # /config, which here is a read-only projected Secret, and it decides
+          # on its own when to bring interfaces up. Calling wg-quick directly
+          # makes the tunnel's lifecycle explicit and puts a failure to
+          # establish it into this container's exit code instead of into a log
+          # line.
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              set -eu
+
+              mkdir -p /etc/wireguard
+              cp /wg/wg0.conf /etc/wireguard/wg0.conf
+              chmod 600 /etc/wireguard/wg0.conf
+
+              wg-quick up wg0
+
+              # wg-quick returns as soon as the interface is configured; the
+              # tunnel is kernel state from then on. Parking here keeps the
+              # container - and so the pod - alive.
+              #
+              # A tunnel that dies later is not noticed. That is deliberate:
+              # the kill switch means a dead tunnel stalls downloads instead of
+              # leaking them, and restarting this container on a failed
+              # handshake would crash-loop noisily for as long as a Mullvad
+              # subscription is lapsed. Recover with a pod restart.
+              while true; do sleep 3600; done
+
+          volumeMounts:
+            - name: wireguard-config
+              mountPath: /wg
+              readOnly: true
+
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+
+        - name: qbittorrent
+          image: lscr.io/linuxserver/qbittorrent:5.2.3_v2.0.14-ls476
+
+          env:
+            - name: PUID
+              value: "1000"
+
+            - name: PGID
+              value: "1000"
+
+            - name: TZ
+              value: Europe/Warsaw
+
+            - name: WEBUI_PORT
+              value: "8080"
+
+          ports:
+            - name: webui
+              containerPort: 8080
+
+          volumeMounts:
+            - name: config
+              mountPath: /config
+
+            # /data/torrents, not /data: the same path the compose file used,
+            # so every .fastresume entry still points at a file that exists.
+            # Changing it would make qBittorrent recheck or re-download the lot.
+            - name: data
+              mountPath: /data/torrents
+              subPath: torrents
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+
+      volumes:
+        - name: wireguard-config
+          secret:
+            secretName: qbittorrent-wireguard
+
+        - name: config
+          persistentVolumeClaim:
+            claimName: qbittorrent-config
+
+        - name: data
+          persistentVolumeClaim:
+            claimName: arr-stack-data

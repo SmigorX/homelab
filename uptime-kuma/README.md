@@ -19,10 +19,11 @@ This is the first `Middleware` in this repo, and the first proxy provider in
 
 | Piece | Where |
 | --- | --- |
-| Proxy provider + application + outpost assignment | `authentik/manifests/blueprints.yaml`, key `uptime-kuma.yaml` |
+| Proxy provider + application | `authentik/manifests/blueprints.yaml`, key `uptime-kuma.yaml` |
+| Outpost assignment | `authentik/manifests/blueprints.yaml`, key `proxy-outpost.yaml` |
 | `forwardAuth` middleware | `manifests/middleware.yaml` |
 | Router annotation pointing at it | `manifests/ingress.yaml` |
-| Group allow-list | `authentik/manifests/blueprints.yaml`, same key |
+| Group allow-list | `authentik/manifests/blueprints.yaml`, key `uptime-kuma.yaml` |
 
 ### Who gets in
 
@@ -54,10 +55,17 @@ silently never work. Domain level keeps the whole login round trip on
 `auth.k8s.internal.smigorx.eu`, which already exists, and sets one cookie for
 the entire `k8s.internal.smigorx.eu` zone.
 
-The useful side effect is that none of this is Uptime Kuma specific. Another
-app with no SSO of its own needs only a copy of the Middleware in its namespace
-and its provider added to the same embedded outpost — no new Authentik host, no
-new outpost Deployment.
+The useful side effect is that none of this is Uptime Kuma specific — no new
+Authentik host and no new outpost Deployment for the next app either.
+
+It does not stretch to a *second* domain level provider, though. One claims the
+whole `k8s.internal.smigorx.eu` cookie domain, so a second claiming the same
+domain leaves the outpost unable to say which application's policies a given
+host belongs to. The arr stack needed per-application authorization and so went
+to `forward_single` instead, routing `/outpost.goauthentik.io/*` from an Ingress
+in the *authentik* namespace rather than reaching across namespaces with an
+`ExternalName`; see `arr-stack/README.md`. Reuse this provider only for
+something content with the same allow-list as Uptime Kuma.
 
 ### This fails open
 

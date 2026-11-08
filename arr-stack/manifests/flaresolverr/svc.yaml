@@ -1,0 +1,17 @@
+# ClusterIP only, and no Ingress: this has no interface worth opening and no
+# authentication of its own. Prowlarr reaches it at
+# http://flaresolverr.arr-stack.svc.cluster.local:8191.
+apiVersion: v1
+kind: Service
+metadata:
+  name: flaresolverr
+  namespace: arr-stack
+spec:
+  selector:
+    app: flaresolverr
+
+  ports:
+    - name: http
+      port: 8191
+      targetPort: http
+      protocol: TCP

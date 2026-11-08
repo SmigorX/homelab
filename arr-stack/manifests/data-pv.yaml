@@ -1,0 +1,50 @@
+# The downloads and media tree, mounted in place: this is the very directory
+# the Docker compose stack used, not a copy of it. Nothing moves, so a rollback
+# to Docker needs only for these pods to stop.
+#
+# One volume for the whole tree rather than one per directory, because Sonarr
+# and Radarr import by hardlinking out of qBittorrent's download directory into
+# the library. A hardlink cannot cross filesystems, so splitting torrents/ and
+# media/ into separate volumes would silently downgrade every import to a full
+# copy - twice the space and minutes instead of milliseconds. Consumers mount
+# the subdirectory they need through the claim's subPath, which keeps them on
+# this one filesystem.
+#
+# Follows immich/manifests/pv.yaml; see that file for why a static volume is
+# the right shape for an adopted directory.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: arr-stack-data
+spec:
+  # hostPath enforces no quota, so this is nominal: it only has to be >= the
+  # claim's request for the two to bind. The real ceiling is the bulk pool.
+  capacity:
+    storage: 4Ti
+
+  accessModes:
+    - ReadWriteOnce
+
+  # Deleting the claim must never delete the library. Retain also means a
+  # rebuild leaves this volume Released and needing its claimRef cleared by
+  # hand - the correct trade in this direction.
+  persistentVolumeReclaimPolicy: Retain
+
+  volumeMode: Filesystem
+
+  # Empty string, not omitted: there is no default StorageClass in this cluster,
+  # and this says explicitly that no provisioner may touch this volume.
+  storageClassName: ""
+
+  # Pre-bound, so no other claim in any namespace can take it.
+  claimRef:
+    namespace: arr-stack
+    name: arr-stack-data
+
+  hostPath:
+    # The path the compose stack bind-mounted as /data into Sonarr and Radarr.
+    path: /mnt/nas/bulk/arr
+    # Load-bearing. Without it, a pod starting while /mnt/nas is not mounted
+    # makes the kubelet *create* this path, and the stack boots onto an empty
+    # library - which Sonarr and Radarr would read as "every file is gone".
+    type: Directory

@@ -1,0 +1,65 @@
+# Under Docker this sat inside Gluetun's network namespace, so indexer requests
+# went out over the VPN and an unhealthy Gluetun took Prowlarr down with it.
+# Here it is an ordinary pod: indexer traffic leaves over the house connection,
+# which is what indexers that rate-limit or ban shared VPN exit addresses
+# prefer anyway, and nothing about it depends on the tunnel.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prowlarr
+  namespace: arr-stack
+spec:
+  replicas: 1
+
+  # ReadWriteOnce config volume over a SQLite database that tolerates exactly
+  # one writer.
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: prowlarr
+
+  template:
+    metadata:
+      labels:
+        app: prowlarr
+
+    spec:
+      enableServiceLinks: false
+
+      containers:
+        - name: prowlarr
+          image: lscr.io/linuxserver/prowlarr:2.6.5.5623-ls161
+
+          env:
+            - name: PUID
+              value: "1000"
+
+            - name: PGID
+              value: "1000"
+
+            - name: TZ
+              value: Europe/Warsaw
+
+          ports:
+            - name: http
+              containerPort: 9696
+
+          # No media volume: Prowlarr only brokers indexers and never touches a
+          # file on disk beyond its own database.
+          volumeMounts:
+            - name: config
+              mountPath: /config
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: prowlarr-config

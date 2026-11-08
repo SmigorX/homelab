@@ -1,0 +1,90 @@
+# What makes forward_single usable in this cluster.
+#
+# A single-application proxy provider completes its login round trip on the
+# application's own host: the browser is sent to
+# https://sonarr.k8s.internal.smigorx.eu/outpost.goauthentik.io/callback, so
+# that path has to reach the embedded outpost. An Ingress may only name a
+# Service in its own namespace, and pointing at authentik across namespaces
+# would need an ExternalName Service that k3s's Traefik refuses to route
+# without --providers.kubernetescrd.allowExternalNameServices.
+#
+# The way around it is to stop trying to route the path from the application's
+# namespace. Host is a routing rule, not a property of a namespace: this
+# Ingress lives beside authentik-server, names it as an ordinary local Service,
+# and claims one path on each protected host. Traefik ranks routers by rule
+# specificity, so Host + this prefix wins over the application's Host + "/" and
+# everything else still reaches the app.
+#
+# Deliberately no forwardAuth middleware here. This path *is* the
+# authentication; putting the middleware on it would ask the outpost to
+# authenticate the request that exists to authenticate requests.
+#
+# Uptime Kuma is absent on purpose - it stays on the domain level provider and
+# needs no path of its own.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: arr-stack-outpost
+  namespace: authentik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+
+  rules:
+    - host: qbittorrent.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /outpost.goauthentik.io
+            pathType: Prefix
+            backend:
+              service:
+                name: authentik-server
+                port:
+                  number: 80
+
+    - host: prowlarr.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /outpost.goauthentik.io
+            pathType: Prefix
+            backend:
+              service:
+                name: authentik-server
+                port:
+                  number: 80
+
+    - host: sonarr.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /outpost.goauthentik.io
+            pathType: Prefix
+            backend:
+              service:
+                name: authentik-server
+                port:
+                  number: 80
+
+    - host: radarr.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /outpost.goauthentik.io
+            pathType: Prefix
+            backend:
+              service:
+                name: authentik-server
+                port:
+                  number: 80
+
+  # One certificate with four names, separate from the ones the applications'
+  # own Ingresses hold: a Secret cannot be read across namespaces, so this
+  # router needs its own copy even though the hostnames are already covered.
+  tls:
+    - hosts:
+        - qbittorrent.k8s.internal.smigorx.eu
+        - prowlarr.k8s.internal.smigorx.eu
+        - sonarr.k8s.internal.smigorx.eu
+        - radarr.k8s.internal.smigorx.eu
+      secretName: arr-stack-outpost-tls

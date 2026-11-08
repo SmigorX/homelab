@@ -346,17 +346,11 @@ data:
         attrs:
           enabled: true
 
-      # The embedded outpost only proxies providers explicitly assigned to it.
-      # This list replaces whatever is there, which is safe only because this
-      # is currently the single proxy provider in the cluster - a second one
-      # must be added to this same list, not to a list of its own.
-      - model: authentik_outposts.outpost
-        identifiers:
-          name: authentik Embedded Outpost
-        attrs:
-          type: proxy
-          providers:
-            - !KeyOf uptime-kuma-provider
+      # The embedded outpost's provider list used to live here. It moved to
+      # proxy-outpost.yaml below once the arr stack added four more proxy
+      # providers: the list replaces rather than appends, so two blueprints
+      # each declaring their own would take turns evicting each other's
+      # providers, and !KeyOf cannot reach an id defined in another blueprint.
   miniflux.yaml: |
     version: 1
     metadata:
@@ -509,3 +503,185 @@ data:
           group: Applications
           meta_launch_url: https://forgejo.k8s.internal.smigorx.eu
           provider: !KeyOf forgejo-provider
+
+  # qBittorrent, Prowlarr, Sonarr and Radarr. Like Uptime Kuma these have no
+  # SSO of their own, so they sit behind forward auth - but unlike Uptime Kuma
+  # each gets its own provider in forward_single mode.
+  #
+  # Domain level would have been the obvious copy. It does not work for more
+  # than one application: a forward_domain provider claims an entire cookie
+  # domain, and a second one claiming the same k8s.internal.smigorx.eu leaves
+  # the outpost with no way to tell which application's policies a request for
+  # sonarr belongs to. Per-application authorization needs per-application
+  # providers.
+  #
+  # What made forward_single look impossible - /outpost.goauthentik.io/* has to
+  # answer on each application's own host, and an Ingress cannot name a Service
+  # in another namespace without ExternalName, which this Traefik refuses -
+  # turns out to be avoidable by serving those paths from an Ingress in *this*
+  # namespace, where authentik-server is a local Service. That Ingress is
+  # authentik/manifests/outpost-ingress.yaml.
+  arr-stack.yaml: |
+    version: 1
+    metadata:
+      name: Arr Stack forward auth applications
+      labels:
+        blueprints.goauthentik.io/description: qBittorrent, Prowlarr, Sonarr and Radarr forward auth
+
+    entries:
+      - model: authentik_providers_proxy.proxyprovider
+        id: qbittorrent-provider
+        identifiers:
+          name: qbittorrent
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: https://qbittorrent.k8s.internal.smigorx.eu
+
+      - model: authentik_core.application
+        id: qbittorrent-app
+        identifiers:
+          slug: qbittorrent
+        attrs:
+          name: qBittorrent
+          group: Media Management
+          meta_launch_url: https://qbittorrent.k8s.internal.smigorx.eu
+          provider: !KeyOf qbittorrent-provider
+
+          # Already the model default, but the binding below is only an
+          # allow-list under "any". Flipped to "all" it would demand every
+          # bound group at once.
+          policy_engine_mode: any
+
+      - model: authentik_providers_proxy.proxyprovider
+        id: prowlarr-provider
+        identifiers:
+          name: prowlarr
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: https://prowlarr.k8s.internal.smigorx.eu
+
+      - model: authentik_core.application
+        id: prowlarr-app
+        identifiers:
+          slug: prowlarr
+        attrs:
+          name: Prowlarr
+          group: Media Management
+          meta_launch_url: https://prowlarr.k8s.internal.smigorx.eu
+          provider: !KeyOf prowlarr-provider
+          policy_engine_mode: any
+
+      - model: authentik_providers_proxy.proxyprovider
+        id: sonarr-provider
+        identifiers:
+          name: sonarr
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: https://sonarr.k8s.internal.smigorx.eu
+
+      - model: authentik_core.application
+        id: sonarr-app
+        identifiers:
+          slug: sonarr
+        attrs:
+          name: Sonarr
+          group: Media Management
+          meta_launch_url: https://sonarr.k8s.internal.smigorx.eu
+          provider: !KeyOf sonarr-provider
+          policy_engine_mode: any
+
+      - model: authentik_providers_proxy.proxyprovider
+        id: radarr-provider
+        identifiers:
+          name: radarr
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: https://radarr.k8s.internal.smigorx.eu
+
+      - model: authentik_core.application
+        id: radarr-app
+        identifiers:
+          slug: radarr
+        attrs:
+          name: Radarr
+          group: Media Management
+          meta_launch_url: https://radarr.k8s.internal.smigorx.eu
+          provider: !KeyOf radarr-provider
+          policy_engine_mode: any
+
+      # Admins only, deliberately narrower than Uptime Kuma's guests-and-admins.
+      # These four can start downloads, rewrite the library and read every
+      # indexer credential in Prowlarr; a status page they are not.
+      #
+      # An application with no bindings at all is open to every authenticated
+      # user, so each of the four needs its own - there is no inheritance and a
+      # superuser gets no implicit pass.
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf qbittorrent-app
+          group: !Find [authentik_core.group, [name, "authentik Admins"]]
+          order: 0
+        attrs:
+          enabled: true
+
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf prowlarr-app
+          group: !Find [authentik_core.group, [name, "authentik Admins"]]
+          order: 0
+        attrs:
+          enabled: true
+
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf sonarr-app
+          group: !Find [authentik_core.group, [name, "authentik Admins"]]
+          order: 0
+        attrs:
+          enabled: true
+
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf radarr-app
+          group: !Find [authentik_core.group, [name, "authentik Admins"]]
+          order: 0
+        attrs:
+          enabled: true
+
+  # The embedded outpost only proxies providers explicitly assigned to it, and
+  # the assignment replaces the list rather than adding to it. That makes it
+  # one blueprint's job to name all of them, in its own key: left in
+  # uptime-kuma.yaml or arr-stack.yaml, whichever reconciled last would evict
+  # the other's providers, and !KeyOf cannot reach an id in another blueprint
+  # anyway - hence !Find by name throughout.
+  #
+  # Every future forward auth provider belongs in this list too. One missing
+  # entry does not error; the outpost simply stops answering for that host and
+  # the app 404s at the login round trip.
+  proxy-outpost.yaml: |
+    version: 1
+    metadata:
+      name: Embedded proxy outpost provider assignment
+      labels:
+        blueprints.goauthentik.io/description: Every proxy provider the embedded outpost serves
+
+    entries:
+      - model: authentik_outposts.outpost
+        identifiers:
+          name: authentik Embedded Outpost
+        attrs:
+          type: proxy
+          providers:
+            - !Find [authentik_providers_proxy.proxyprovider, [name, uptime-kuma]]
+            - !Find [authentik_providers_proxy.proxyprovider, [name, qbittorrent]]
+            - !Find [authentik_providers_proxy.proxyprovider, [name, prowlarr]]
+            - !Find [authentik_providers_proxy.proxyprovider, [name, sonarr]]
+            - !Find [authentik_providers_proxy.proxyprovider, [name, radarr]]

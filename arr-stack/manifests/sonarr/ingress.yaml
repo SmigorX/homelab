@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sonarr
+  namespace: arr-stack
+  annotations:
+    gethomepage.dev/enabled: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    gethomepage.dev/name: Sonarr
+    gethomepage.dev/description: Series library
+    gethomepage.dev/group: Media Management
+    gethomepage.dev/icon: sonarr.png
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.middlewares: arr-stack-authentik@kubernetescrd
+spec:
+  ingressClassName: traefik
+
+  rules:
+    - host: sonarr.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sonarr
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - sonarr.k8s.internal.smigorx.eu
+      secretName: sonarr-tls

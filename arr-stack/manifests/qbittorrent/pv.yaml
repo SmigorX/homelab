@@ -1,0 +1,35 @@
+# qBittorrent's settings and, more importantly, its .fastresume files: the
+# per-torrent state that says which pieces are already on disk and where the
+# payload lives. Losing this directory does not lose the downloads, but it does
+# lose every torrent's registration, forcing a recheck of the entire library
+# and dropping the seeding ratio to zero.
+#
+# Unlike the media tree this did not live on the NAS under Docker - it was
+# ./config/qbittorrent next to the compose file, on the server's own disk. It
+# is rsynced onto the NAS before this volume is applied; see arr-stack/README.md.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: qbittorrent-config
+spec:
+  capacity:
+    storage: 5Gi
+
+  accessModes:
+    - ReadWriteOnce
+
+  persistentVolumeReclaimPolicy: Retain
+
+  volumeMode: Filesystem
+
+  storageClassName: ""
+
+  claimRef:
+    namespace: arr-stack
+    name: qbittorrent-config
+
+  hostPath:
+    path: /mnt/nas/bulk/arr/config/qbittorrent
+    # A missing directory must fail the pod, not be created empty: qBittorrent
+    # treats an empty /config as a first run and starts with no torrents at all.
+    type: Directory

@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prowlarr
+  namespace: arr-stack
+  annotations:
+    gethomepage.dev/enabled: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    gethomepage.dev/name: Prowlarr
+    gethomepage.dev/description: Indexer manager
+    gethomepage.dev/group: Media Management
+    gethomepage.dev/icon: prowlarr.png
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.middlewares: arr-stack-authentik@kubernetescrd
+spec:
+  ingressClassName: traefik
+
+  rules:
+    - host: prowlarr.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prowlarr
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - prowlarr.k8s.internal.smigorx.eu
+      secretName: prowlarr-tls

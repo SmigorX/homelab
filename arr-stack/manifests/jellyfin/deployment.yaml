@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: arr-stack
+spec:
+  replicas: 1
+
+  # ReadWriteOnce config volume over a SQLite library database, and a GPU that
+  # two transcoding processes should not fight over.
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: jellyfin
+
+  template:
+    metadata:
+      labels:
+        app: jellyfin
+
+    spec:
+      enableServiceLinks: false
+
+      # gid 105 is the render group on this host, which owns
+      # /dev/dri/renderD128 at mode 0660. The compose file passed the same
+      # number through group_add. It is load-bearing even alongside privileged
+      # below: privileged settles the kernel's device cgroup, this settles file
+      # permissions, and the ffmpeg doing the transcoding runs as uid 1000
+      # rather than root. Re-check with `getent group render` if the host is
+      # ever rebuilt.
+      securityContext:
+        supplementalGroups:
+          - 105
+
+      containers:
+        - name: jellyfin
+          image: lscr.io/linuxserver/jellyfin:12.1ubu2604-ls50
+
+          # Bind-mounting /dev/dri is not enough on its own: runc gives every
+          # unprivileged container a cgroup device filter allowing only a
+          # default set (null, zero, tty, random...), and a DRI render node is
+          # not in it, so opening the device fails with EPERM whatever the file
+          # mode says. This is the same wall zigbee2mqtt hit with its USB
+          # dongle - see the A/B test written up in
+          # home-automation/manifests/zigbee2mqtt/deployment.yaml.
+          #
+          # The failure without this is quiet rather than loud: Jellyfin falls
+          # back to software transcoding, playback still works, and the only
+          # symptom is the CPU pinned during every transcode.
+          securityContext:
+            privileged: true
+
+          env:
+            - name: PUID
+              value: "1000"
+
+            - name: PGID
+              value: "1000"
+
+            - name: TZ
+              value: Europe/Warsaw
+
+          ports:
+            - name: http
+              containerPort: 8096
+
+          volumeMounts:
+            - name: config
+              mountPath: /config
+
+            # media/ only. Jellyfin has no business seeing the torrents
+            # directory: half-finished downloads in a library scan produce
+            # broken entries that linger after the file is renamed on import.
+            - name: data
+              mountPath: /data/media
+              subPath: media
+
+            - name: dri
+              mountPath: /dev/dri
+
+          # Generous because transcoding is bursty: idle Jellyfin is small, and
+          # a 4K transcode is not.
+          resources:
+            requests:
+              cpu: 200m
+              memory: 1Gi
+            limits:
+              memory: 4Gi
+
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: jellyfin-config
+
+        - name: data
+          persistentVolumeClaim:
+            claimName: arr-stack-data
+
+        - name: dri
+          hostPath:
+            path: /dev/dri
+            # Directory, not CharDevice: /dev/dri is a directory holding the
+            # card and renderD nodes, and Jellyfin probes it for both.
+            type: Directory

@@ -1,0 +1,37 @@
+# The one app in this namespace with no Authentik middleware. Jellyfin has its
+# own accounts, and the people who use it - and the TV and phone clients they
+# use it from - have no Authentik login and no way to complete a forward auth
+# redirect. Putting it behind the middleware would lock out exactly the
+# audience it exists for.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jellyfin
+  namespace: arr-stack
+  annotations:
+    gethomepage.dev/enabled: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    gethomepage.dev/name: Jellyfin
+    gethomepage.dev/description: Media library
+    gethomepage.dev/group: Media Management
+    gethomepage.dev/icon: jellyfin.png
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+
+  rules:
+    - host: jellyfin.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jellyfin
+                port:
+                  name: http
+  tls:
+    - hosts:
+        - jellyfin.k8s.internal.smigorx.eu
+      secretName: jellyfin-tls

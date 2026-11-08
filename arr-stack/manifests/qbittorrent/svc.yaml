@@ -1,0 +1,18 @@
+# A Service routes to the pod's IP, and every container in the pod shares it,
+# so this reaches qBittorrent without knowing or caring that a VPN sidecar is
+# in the same pod. That indifference is the point: Sonarr, Radarr and Prowlarr
+# configure this as an ordinary host and keep working whatever the tunnel does.
+apiVersion: v1
+kind: Service
+metadata:
+  name: qbittorrent
+  namespace: arr-stack
+spec:
+  selector:
+    app: qbittorrent
+
+  ports:
+    - name: webui
+      port: 8080
+      targetPort: webui
+      protocol: TCP

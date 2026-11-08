@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: radarr
+  namespace: arr-stack
+spec:
+  replicas: 1
+
+  # ReadWriteOnce config volume over a SQLite database that tolerates exactly
+  # one writer.
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: radarr
+
+  template:
+    metadata:
+      labels:
+        app: radarr
+
+    spec:
+      enableServiceLinks: false
+
+      containers:
+        - name: radarr
+          image: lscr.io/linuxserver/radarr:6.4.4.10685-ls317
+
+          env:
+            - name: PUID
+              value: "1000"
+
+            - name: PGID
+              value: "1000"
+
+            - name: TZ
+              value: Europe/Warsaw
+
+          ports:
+            - name: http
+              containerPort: 7878
+
+          volumeMounts:
+            - name: config
+              mountPath: /config
+
+            # The whole tree at /data for the same reason as Sonarr: downloads
+            # and library under one mount, so imports hardlink instead of copy.
+            - name: data
+              mountPath: /data
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: radarr-config
+
+        - name: data
+          persistentVolumeClaim:
+            claimName: arr-stack-data

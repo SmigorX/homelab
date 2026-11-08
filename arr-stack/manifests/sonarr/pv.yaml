@@ -1,0 +1,30 @@
+# Sonarr's database: the series list, every episode's file mapping, quality
+# profiles and download history. Without it Sonarr sees an empty library and
+# would happily re-grab everything already on disk.
+#
+# Rsynced from ./config/sonarr next to the old compose file; see
+# arr-stack/README.md.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: sonarr-config
+spec:
+  capacity:
+    storage: 10Gi
+
+  accessModes:
+    - ReadWriteOnce
+
+  persistentVolumeReclaimPolicy: Retain
+
+  volumeMode: Filesystem
+
+  storageClassName: ""
+
+  claimRef:
+    namespace: arr-stack
+    name: sonarr-config
+
+  hostPath:
+    path: /mnt/nas/bulk/arr/config/sonarr
+    type: Directory

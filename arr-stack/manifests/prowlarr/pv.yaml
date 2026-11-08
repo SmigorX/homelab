@@ -1,0 +1,31 @@
+# Prowlarr's database: every configured indexer, its credentials, and the sync
+# relationships that push them into Sonarr and Radarr. Rebuilding this by hand
+# is the single most tedious part of the stack, which is why it is adopted
+# rather than started empty.
+#
+# Rsynced from ./config/prowlarr next to the old compose file; see
+# arr-stack/README.md.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: prowlarr-config
+spec:
+  capacity:
+    storage: 5Gi
+
+  accessModes:
+    - ReadWriteOnce
+
+  persistentVolumeReclaimPolicy: Retain
+
+  volumeMode: Filesystem
+
+  storageClassName: ""
+
+  claimRef:
+    namespace: arr-stack
+    name: prowlarr-config
+
+  hostPath:
+    path: /mnt/nas/bulk/arr/config/prowlarr
+    type: Directory

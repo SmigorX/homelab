@@ -1,0 +1,30 @@
+# Radarr's database: the movie list, file mappings, quality profiles and
+# download history. Without it Radarr sees an empty library and would happily
+# re-grab everything already on disk.
+#
+# Rsynced from ./config/radarr next to the old compose file; see
+# arr-stack/README.md.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: radarr-config
+spec:
+  capacity:
+    storage: 10Gi
+
+  accessModes:
+    - ReadWriteOnce
+
+  persistentVolumeReclaimPolicy: Retain
+
+  volumeMode: Filesystem
+
+  storageClassName: ""
+
+  claimRef:
+    namespace: arr-stack
+    name: radarr-config
+
+  hostPath:
+    path: /mnt/nas/bulk/arr/config/radarr
+    type: Directory

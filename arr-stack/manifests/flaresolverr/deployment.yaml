@@ -1,0 +1,65 @@
+# A headless browser Prowlarr drives to get past Cloudflare interstitials on
+# indexers that use them.
+#
+# Stateless, so no volume: every session is thrown away when the pod restarts,
+# which matches the compose file - it had no volume either.
+#
+# It is deliberately not behind the VPN, unlike under Docker where it shared
+# Gluetun's namespace. It answers Prowlarr, which is not behind the VPN either,
+# and a Cloudflare challenge solved from a datacentre exit address that
+# thousands of people share is markedly more likely to be challenged again.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flaresolverr
+  namespace: arr-stack
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: flaresolverr
+
+  template:
+    metadata:
+      labels:
+        app: flaresolverr
+
+    spec:
+      enableServiceLinks: false
+
+      containers:
+        - name: flaresolverr
+          image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
+
+          env:
+            - name: LOG_LEVEL
+              value: info
+
+            - name: TZ
+              value: Europe/Warsaw
+
+          ports:
+            - name: http
+              containerPort: 8191
+
+          # Chromium, so the floor is high and the ceiling has to allow for a
+          # page that decides to be expensive.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+
+          # The compose file health-checked this and it is worth keeping: a
+          # wedged browser answers the port but never solves a challenge, and
+          # Prowlarr's only symptom is indexers quietly failing.
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3

@@ -1,0 +1,22 @@
+# Binds to the static PersistentVolume in data-pv.yaml. storageClassName is the
+# empty string and volumeName is explicit, so this claim can only ever bind to
+# that one volume and never triggers dynamic provisioning.
+#
+# ReadWriteOnce while four pods mount it at once (qBittorrent, Sonarr, Radarr,
+# Jellyfin) is not a contradiction: RWO restricts a volume to one *node*, not
+# one pod, and this cluster schedules everything onto the single node that has
+# /mnt/nas. It would become one if a second node were ever added and these pods
+# spread across both.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: arr-stack-data
+  namespace: arr-stack
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: arr-stack-data
+  resources:
+    requests:
+      storage: 4Ti
