@@ -264,17 +264,32 @@ Before Argo CD syncs anything. Every step is on the server.
     kubectl -n arr-stack exec deploy/qbittorrent -c wireguard -- wg show
     kubectl -n arr-stack exec deploy/qbittorrent -c qbittorrent -- curl -s https://am.i.mullvad.net/json
 
-The second should report a Mullvad exit in Düsseldorf.
+The second should report `"mullvad_exit_ip":true`, in whichever city the server
+in `wg0.conf` is.
 
 **The kill switch holds.** Drop the tunnel and confirm the pod goes deaf
 outbound but stays reachable inbound:
 
-    kubectl -n arr-stack exec deploy/qbittorrent -c wireguard -- wg-quick down wg0
-    kubectl -n arr-stack exec deploy/qbittorrent -c qbittorrent -- curl -sS --max-time 10 https://am.i.mullvad.net/json   # must fail
+    kubectl -n arr-stack exec deploy/qbittorrent -c wireguard -- wg-quick down /run/wireguard/wg0.conf
+    kubectl -n arr-stack exec deploy/qbittorrent -c wireguard -- iptables -L OUTPUT -n -v | head -1
+    kubectl -n arr-stack exec deploy/qbittorrent -c qbittorrent -- curl -sS --max-time 10 https://1.1.1.1/cdn-cgi/trace   # must time out
+    kubectl -n arr-stack exec deploy/qbittorrent -c wireguard -- iptables -L OUTPUT -n -v | head -1
     curl -sk -o /dev/null -w '%{http_code}\n' https://qbittorrent.k8s.internal.smigorx.eu/                               # must still answer
 
-A reply from the first command containing the home address is a leak and the
-whole point of this layout failing. Restore with a rollout restart.
+The full path is needed: the sidecar keeps its config in `/run/wireguard`, not
+the `/etc/wireguard` that `wg-quick down wg0` would look in.
+
+The probe goes to an address, not a hostname, on purpose. With the tunnel down
+DNS fails first (Mullvad's resolver is only reachable through it), so a
+hostname dies at `Could not resolve host` without a single packet testing the
+OUTPUT rules — reassuring, and proving nothing about qBittorrent, which reaches
+peers by IP. Expect curl's exit code 28 and the `policy DROP` counter to climb
+between the two readings; qBittorrent's own peer attempts make it climb by
+thousands, not by curl's handful.
+
+Any reply to the `curl` — a `ip=` line in the trace — is a leak: with the tunnel
+down it could only have left over the home address, and that is the whole point
+of this layout failing. Restore with a rollout restart.
 
 **Imports hardlink rather than copy.** After one import, compare inode numbers
 on the node — equal means hardlinked, and a second copy of the file is not
