@@ -101,12 +101,16 @@ machine-learning:
     main:
       containers:
         main:
+          # Models are loaded on demand and unloaded when idle, so this sat at
+          # ~230Mi between jobs. The request was halved from 1Gi to leave the
+          # node room for rolling updates (see monitoring/README.md). A
+          # face-detection or smart-search run grows into the limit, which is
+          # what has to fit the models.
           resources:
             requests:
               cpu: 100m
-              memory: 1Gi
+              memory: 512Mi
             limits:
-              # Model loading is the memory floor here, not the request.
               memory: 6Gi
 
   persistence:

@@ -43,12 +43,15 @@ spec:
             - name: http
               containerPort: 8191
 
-          # Chromium, so the floor is high and the ceiling has to allow for a
-          # page that decides to be expensive.
+          # Chromium only runs while a challenge is being solved; between
+          # requests this idled at ~145Mi. The request was halved from 512Mi to
+          # leave the node room for rolling updates (see monitoring/README.md).
+          # The ceiling still has to allow for a page that decides to be
+          # expensive.
           resources:
             requests:
               cpu: 100m
-              memory: 512Mi
+              memory: 256Mi
             limits:
               memory: 2Gi
 

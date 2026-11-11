@@ -47,3 +47,23 @@ spec:
       bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
       tlsConfig:
         insecureSkipVerify: true
+---
+# Argo CD's application controller, for argocd_app_info: every Application's
+# sync and health status, which the Health dashboard tabulates. The chart's own
+# metrics Services are off, but the container port named `metrics` (8082) is
+# always open, and its NetworkPolicy already admits that port from any
+# namespace.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: argocd-application-controller
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - argocd
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: argocd-application-controller
+  podMetricsEndpoints:
+    - port: metrics

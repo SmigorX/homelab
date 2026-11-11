@@ -42,6 +42,14 @@ global:
     # BEFORE this lands: a secretKeyRef to a key that is not there yet leaves
     # both authentik pods in CreateContainerConfigError, which takes SSO down
     # for every other application here, not just Miniflux.
+    #
+    # A new variable and the blueprint that reads it with !Env land in the same
+    # sync, and the old worker - without the variable - can see the new
+    # blueprint file first. Its apply fails, and Authentik only retries a
+    # blueprint when the file changes, so it stays failed and the app's login
+    # says "Client ID Error". This happened with Grafana. Check the blueprint's
+    # status in the admin UI (Customization > Blueprints) and apply it by hand
+    # if it shows an error.
     - name: MINIFLUX_OIDC_CLIENT_SECRET
       valueFrom:
         secretKeyRef:

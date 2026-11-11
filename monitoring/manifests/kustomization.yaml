@@ -1,0 +1,29 @@
+# Kustomize rather than a plain directory, only so the dashboards can be kept
+# as plain .json files (editable, diffable, exportable from Grafana) instead of
+# being embedded as strings in a ConfigMap by hand.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - vault-secret.yaml
+  - scrapes.yaml
+
+# One ConfigMap, one key per dashboard. Grafana's dashboard sidecar picks up
+# anything in this namespace with the grafana_dashboard label and writes each
+# key out as a file - which is how values.yaml can point the home dashboard at
+# health.json.
+configMapGenerator:
+  - name: homelab-dashboards
+    namespace: monitoring
+    files:
+      - dashboards/resources.json
+      - dashboards/node.json
+      - dashboards/health.json
+      - dashboards/ingress.json
+
+generatorOptions:
+  # A stable name: the sidecar reacts to the content changing, not to a new
+  # ConfigMap, and a hash suffix would only leave pruned copies behind.
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"

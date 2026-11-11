@@ -212,6 +212,15 @@ prometheus-node-exporter:
 
 # --- Grafana -----------------------------------------------------------------
 
+# The chart's ~40 stock dashboards (Windows, AIX and Darwin nodes, multicluster,
+# the components k3s does not split out) are off. The dashboards used here are
+# hand-written for this cluster and live in manifests/dashboards/; see
+# README.md. Turning this off does not delete the ConfigMaps the sync job
+# already created, because the job loses its ConfigMap permissions with it.
+# README.md has the one-off cleanup.
+defaultDashboards:
+  enabled: false
+
 grafana:
   # Kept out of the chart's hands: left to itself it generates the admin
   # password with randAlphaNum, Argo CD re-renders it on every refresh, and the
@@ -255,8 +264,13 @@ grafana:
       role_attribute_strict: true
       allow_sign_up: true
 
-  # Dashboards come from the chart and Git, but users, preferences and
-  # anything built by hand in the UI live in Grafana's SQLite database.
+    # Where the sidecar writes the `health.json` key of the homelab-dashboards
+    # ConfigMap.
+    dashboards:
+      default_home_dashboard_path: /var/lib/grafana/dashboards/default/health.json
+
+  # Dashboards come from Git, but users, preferences and anything built by
+  # hand in the UI live in Grafana's SQLite database.
   persistence:
     enabled: true
     type: pvc
@@ -298,3 +312,11 @@ grafana:
         memory: 48Mi
       limits:
         memory: 128Mi
+
+    # Everything the sidecar loads, which is every ConfigMap in this namespace
+    # labelled grafana_dashboard: "1", goes in one folder. Provisioned
+    # dashboards cannot be saved from the UI. Edit, then export the JSON over
+    # the file in manifests/dashboards/.
+    dashboards:
+      provider:
+        folder: Homelab
