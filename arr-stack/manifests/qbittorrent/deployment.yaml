@@ -223,10 +223,13 @@ spec:
               mountPath: /data/torrents
               subPath: torrents
 
+          # Requests trimmed from 100m/512Mi to make room for monitoring/: it
+          # ran at ~30m and ~60Mi while seeding. The limit is untouched, so a
+          # large torrent's piece cache still has the same 2Gi to grow into.
           resources:
             requests:
-              cpu: 100m
-              memory: 512Mi
+              cpu: 50m
+              memory: 256Mi
             limits:
               memory: 2Gi
 

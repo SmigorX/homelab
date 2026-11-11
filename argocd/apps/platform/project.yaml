@@ -13,6 +13,7 @@ spec:
     - https://charts.goauthentik.io
     - https://charts.jetstack.io
     - https://helm.releases.hashicorp.com
+    - https://victoriametrics.github.io/helm-charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"

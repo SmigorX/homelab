@@ -26,10 +26,13 @@ spec:
         - name: nextcloud
           image: nextcloud:34.0.3-apache
 
+          # Requests trimmed from 100m/512Mi to make room for monitoring/: it
+          # idled at ~7m and ~70Mi. The limit is untouched, so a burst (a big
+          # upload, a preview run) still has the same 2Gi to grow into.
           resources:
             requests:
-              cpu: 100m
-              memory: 512Mi
+              cpu: 50m
+              memory: 256Mi
             limits:
               memory: 2Gi
 

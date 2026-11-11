@@ -1,0 +1,49 @@
+# Targets the chart does not know about. Each lives here, in the monitoring
+# namespace, and reaches into the target's namespace with namespaceSelector -
+# the applications being scraped stay unaware of the monitoring stack.
+
+# Traefik. k3s's packaged chart already exposes Prometheus metrics on the
+# container port named `metrics` (9100) but publishes no Service for it, so
+# this scrapes the pod directly.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: traefik
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - kube-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: traefik
+  podMetricsEndpoints:
+    - port: metrics
+---
+# Vault Secrets Operator. Scraped mostly for its reconcile errors: for five
+# days in November 2026 Vault sat sealed and every VaultStaticSecret failed to
+# sync without anything noticing.
+#
+# The metrics port sits behind kube-rbac-proxy, which wants a bearer token
+# allowed to GET /metrics; vmagent's own ServiceAccount token is. The proxy's
+# certificate is self-signed, hence insecureSkipVerify - the traffic never
+# leaves the node.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: vault-secrets-operator
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - vault-secrets-operator
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vault-secrets-operator
+      control-plane: controller-manager
+  endpoints:
+    - port: https
+      scheme: https
+      bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+      tlsConfig:
+        insecureSkipVerify: true

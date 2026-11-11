@@ -60,6 +60,12 @@ global:
           name: authentik-oidc-secrets
           key: forgejo-client-secret
 
+    - name: GRAFANA_OIDC_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-secrets
+          key: grafana-client-secret
+
 authentik:
   log_level: info
 

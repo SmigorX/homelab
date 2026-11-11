@@ -60,10 +60,13 @@ ingress:
         - forgejo.k8s.internal.smigorx.eu
       secretName: forgejo-tls
 
+# Requests trimmed from 100m/512Mi to make room for monitoring/: it idled at
+# ~3m and ~100Mi. The limit is untouched, so a large push or a repository
+# migration still has the same 2Gi to grow into.
 resources:
   requests:
-    cpu: 100m
-    memory: 512Mi
+    cpu: 50m
+    memory: 256Mi
   limits:
     memory: 2Gi
 

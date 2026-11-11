@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  project: platform
+
+  # Three sources, the same shape as argocd/apps/workloads/forgejo.yaml: the
+  # chart, the repo as a values root for it, and the repo again for what the
+  # chart does not provide (Vault-synced secrets, extra scrapes and rules).
+  sources:
+    - repoURL: https://victoriametrics.github.io/helm-charts
+      chart: victoria-metrics-k8s-stack
+      targetRevision: 0.97.1
+      helm:
+        releaseName: vmks
+        valueFiles:
+          - $values/monitoring/values.yaml
+    - repoURL: git@github.com:SmigorX/homelab.git
+      targetRevision: master
+      ref: values
+    - repoURL: git@github.com:SmigorX/homelab.git
+      targetRevision: master
+      path: monitoring/manifests
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The operator's CRDs run to megabytes, past the 256KiB limit on the
+      # last-applied-configuration annotation client-side apply writes.
+      - ServerSideApply=true
+      # The VMServiceScrape and VMRule objects in monitoring/manifests arrive in
+      # the same sync as the CRDs that define them; without this the first
+      # dry run fails on a kind the API server does not know yet.
+      - SkipDryRunOnMissingResource=true
