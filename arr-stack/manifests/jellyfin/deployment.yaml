@@ -62,6 +62,20 @@ spec:
             - name: TZ
               value: Europe/Warsaw
 
+            # Intel's OpenCL runtime, which the image does not ship. Jellyfin
+            # tone-maps HDR to SDR with OpenCL on a VAAPI pipeline; without a
+            # runtime, every transcode with tone mapping on fails at once
+            # ("Failed to get number of OpenCL platforms: -1001") and the
+            # client reports a playback error. This Skylake iGPU needs the
+            # frozen "legacy1" compute-runtime (24.35), which the mod installs
+            # next to the current one.
+            #
+            # A mod is fetched from ghcr.io and dpkg-installed on every
+            # container start, so start-up takes longer and needs internet.
+            # The tag floats, the way linuxserver documents mods to be used.
+            - name: DOCKER_MODS
+              value: linuxserver/mods:jellyfin-opencl-intel
+
           ports:
             - name: http
               containerPort: 8096
@@ -80,12 +94,17 @@ spec:
             - name: dri
               mountPath: /dev/dri
 
-          # Generous because transcoding is bursty: idle Jellyfin is small, and
-          # a 4K transcode is not.
+          # The request covers idle Jellyfin (~400Mi); the limit covers
+          # transcoding. Two simultaneous 4K HDR -> H.264 software transcodes
+          # (10-bit HEVC, which this iGPU cannot decode) peaked at 3.4Gi in
+          # November 2026, so keep the limit at 4Gi. Requests decide
+          # scheduling only and do not cap a burst; the price of the low
+          # request is that a transcoding Jellyfin is far above it and among
+          # the first pods evicted if the node ever runs out of memory.
           resources:
             requests:
               cpu: 200m
-              memory: 1Gi
+              memory: 512Mi
             limits:
               memory: 4Gi
 

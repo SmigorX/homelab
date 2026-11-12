@@ -298,5 +298,26 @@ sitting in the downloads directory:
     stat -c '%i %n' /mnt/nas/bulk/arr/torrents/<release>/<file> \
                     /mnt/nas/bulk/arr/media/<...>/<file>
 
-**Jellyfin transcodes in hardware.** Play something that forces a transcode and
-check the playback info reports a hardware pipeline rather than `sw`.
+**Jellyfin transcodes in hardware.** The device access above only makes the GPU
+reachable; Jellyfin uses it only once *Dashboard → Playback → Transcoding* says
+so. That setting lives in `/config/encoding.xml` on the config volume, not in
+Git, and until November 2026 it was `none`: every transcode ran on the CPU.
+Set:
+
+- **Hardware acceleration:** VAAPI, device `/dev/dri/renderD128`.
+- **Hardware decoding:** H264, HEVC, MPEG2, VC1, VP8. Not HEVC 10bit, VP9 or
+  AV1: this Skylake iGPU cannot decode them (`vainfo` lists no `HEVCMain10`), so
+  ticking them asks it for something it cannot do. Those files are decoded on the CPU, which
+  is why two 4K HDR (10-bit HEVC) transcodes at once are still heavy here.
+  Clients that direct-play them cost nothing.
+- **Hardware encoding:** on.
+- **Tone mapping:** on, or 4K HDR transcodes come out washed out. It runs on
+  OpenCL, which the image does not include; the `DOCKER_MODS` variable in the
+  Deployment installs Intel's runtime at container start. Without it, every
+  transcode with tone mapping fails outright with *Failed to get number of
+  OpenCL platforms: -1001* in the FFmpeg log, and the client shows a playback
+  error. Check with `kubectl -n arr-stack exec deploy/jellyfin -- clinfo -l`.
+
+To check, play something that forces a transcode. The newest
+`/config/log/FFmpeg.Transcode-*.log` should show `h264_vaapi` rather than
+`libx264` as the video encoder.

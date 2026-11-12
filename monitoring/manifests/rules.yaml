@@ -1,0 +1,34 @@
+# Alerting rules for this cluster, on top of the chart's defaults. VMAlert has
+# selectAllByDefault, so any VMRule in any namespace is picked up.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: homelab
+  namespace: monitoring
+spec:
+  groups:
+    - name: vault
+      rules:
+        # Nothing reports a sealed Vault directly: the pod stays 1/1 by design
+        # (vault/README.md, "A sealed Vault still reports ready"), and Vault's
+        # own metrics are not scraped. VSO is the first thing that notices,
+        # because every VaultStaticSecret refresh fails. In November 2026
+        # Vault sat sealed for five days this way and VSO's error counter
+        # reached 163,000.
+        #
+        # VSO retries with a backoff capped at 60s (its --backoff-max-interval),
+        # so a sealed Vault produces errors in every 10-minute window. A single
+        # transient error does not last the 20 minutes `for` asks for.
+        - alert: VaultSecretsOperatorFailing
+          expr: sum(increase(vso_client_operations_errors_total[10m])) > 0
+          for: 20m
+          labels:
+            severity: critical
+          annotations:
+            summary: Vault Secrets Operator cannot reach Vault; it is probably sealed.
+            description: >-
+              VSO has failed {{ $value | humanize }} Vault calls in the last 10
+              minutes. Secrets synced from Vault are not being refreshed. Check
+              `kubectl --context default -n vault exec vault-0 -- vault status`
+              and unseal it if Sealed is true; a vault-0 restart always comes
+              back sealed.

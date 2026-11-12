@@ -51,6 +51,7 @@ indefinitely. A second round of trims made that room:
 | --- | --- | --- | --- |
 | immich-machine-learning | 100m / 1Gi | 100m / 512Mi | ~2m / ~230Mi |
 | FlareSolverr | 100m / 512Mi | 100m / 256Mi | ~0m / ~145Mi |
+| Jellyfin | 200m / 1Gi | 200m / 512Mi | ~0m / ~400Mi; limit stays 4Gi for transcodes |
 
 The rule since then: **free requestable memory must stay above the largest
 memory request of any RollingUpdate Deployment** (768Mi, Authentik and
@@ -191,6 +192,15 @@ included. Everything else — the default rules have plenty of `info`-level
 alerts such as CPU throttling — goes to a `blackhole` receiver and is only
 visible in Grafana and the Alertmanager UI. A `critical` alert suppresses the
 `warning`s of the same name in the same namespace.
+
+Rules of this cluster's own, beyond the chart's defaults, are in
+[manifests/rules.yaml](manifests/rules.yaml):
+
+- **VaultSecretsOperatorFailing** (critical): VSO has failed Vault calls in
+  every 10-minute window for 20 minutes. In practice that means Vault is
+  sealed, which nothing else reports, since the pod stays `1/1` by design (see
+  `vault/README.md`). Every `vault-0` restart triggers it until Vault is
+  unsealed.
 
 The webhook URL is read from a file mounted from the `alertmanager-discord`
 Secret (`webhook_url_file`), so it never appears in the Alertmanager config
