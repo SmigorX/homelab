@@ -81,9 +81,13 @@ server:
     main:
       containers:
         main:
+          # CPU: ~4m idle, bursts past 150m while generating thumbnails and
+          # transcoding uploads. A request is a floor, not a cap, so the bursts
+          # are unaffected; 150m was lowered to 50m in November 2026, when CPU
+          # requests had become what the node ran out of first.
           resources:
             requests:
-              cpu: 150m
+              cpu: 50m
               # Measured at ~690Mi steady, which was above the old 512Mi
               # request and therefore an early eviction candidate.
               memory: 768Mi
@@ -105,10 +109,11 @@ machine-learning:
           # ~230Mi between jobs. The request was halved from 1Gi to leave the
           # node room for rolling updates (see monitoring/README.md). A
           # face-detection or smart-search run grows into the limit, which is
-          # what has to fit the models.
+          # what has to fit the models. CPU idles at ~3m; 100m -> 50m for the
+          # same reason as the server's.
           resources:
             requests:
-              cpu: 100m
+              cpu: 50m
               memory: 512Mi
             limits:
               memory: 6Gi

@@ -91,7 +91,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "100 * sum(kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) / sum(kube_node_status_allocatable{resource=\"memory\"})",
+          "expr": "100 * sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))) / sum(kube_node_status_allocatable{resource=\"memory\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -142,7 +142,7 @@
       "id": 2,
       "gridPos": {
         "h": 3,
-        "w": 6,
+        "w": 5,
         "x": 0,
         "y": 1
       }
@@ -161,7 +161,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(kube_node_status_allocatable{resource=\"memory\"}) - sum(kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "expr": "sum(kube_node_status_allocatable{resource=\"memory\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))",
           "refId": "A",
           "instant": true,
           "range": false
@@ -211,14 +211,14 @@
       "id": 3,
       "gridPos": {
         "h": 3,
-        "w": 6,
-        "x": 6,
+        "w": 5,
+        "x": 5,
         "y": 1
       }
     },
     {
       "type": "stat",
-      "title": "Rolling-update headroom",
+      "title": "Memory rolling-update headroom",
       "description": "Free memory left after the largest Deployment with a RollingUpdate strategy starts its replacement pod next to the old one. Below zero, that Deployment's next rollout sits Pending, as authentik-server did in November 2026. Recreate Deployments and StatefulSets replace in place and are not counted.",
       "datasource": {
         "type": "prometheus",
@@ -230,7 +230,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "(sum(kube_node_status_allocatable{resource=\"memory\"}) - sum(kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) - max(label_replace(sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"}) * on (namespace, pod) group_left (owner_name) kube_pod_owner{owner_kind=\"ReplicaSet\"}, \"deployment\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\") and on (namespace, deployment) (kube_deployment_spec_strategy_rollingupdate_max_surge > 0))",
+          "expr": "(sum(kube_node_status_allocatable{resource=\"memory\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))) - max(label_replace(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) * on (namespace, pod) group_left (owner_name) kube_pod_owner{owner_kind=\"ReplicaSet\"}, \"deployment\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\") and on (namespace, deployment) (kube_deployment_spec_strategy_rollingupdate_max_surge > 0))",
           "refId": "A",
           "instant": true,
           "range": false
@@ -280,149 +280,9 @@
       "id": 4,
       "gridPos": {
         "h": 3,
-        "w": 6,
-        "x": 12,
+        "w": 5,
+        "x": 10,
         "y": 1
-      }
-    },
-    {
-      "type": "stat",
-      "title": "CPU requested",
-      "description": "Sum of the CPU requests of every pod on the node, as a share of allocatable.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "VictoriaMetrics"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "VictoriaMetrics"
-          },
-          "expr": "100 * sum(kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) / sum(kube_node_status_allocatable{resource=\"cpu\"})",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 85
-              },
-              {
-                "color": "red",
-                "value": 95
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 1
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "wideLayout": true
-      },
-      "id": 5,
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 18,
-        "y": 1
-      }
-    },
-    {
-      "type": "stat",
-      "title": "CPU free to schedule",
-      "description": "Allocatable minus requested, in millicores.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "VictoriaMetrics"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "VictoriaMetrics"
-          },
-          "expr": "1000 * (sum(kube_node_status_allocatable{resource=\"cpu\"}) - sum(kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "suffix:m",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 200
-              },
-              {
-                "color": "green",
-                "value": 500
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value",
-        "justifyMode": "center",
-        "orientation": "auto",
-        "wideLayout": true
-      },
-      "id": 6,
-      "gridPos": {
-        "h": 3,
-        "w": 6,
-        "x": 0,
-        "y": 4
       }
     },
     {
@@ -487,11 +347,286 @@
         "orientation": "auto",
         "wideLayout": true
       },
+      "id": 5,
+      "gridPos": {
+        "h": 3,
+        "w": 5,
+        "x": 15,
+        "y": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Unschedulable pods",
+      "description": "Pods the scheduler has given up placing for now, almost always for lack of requestable memory or CPU. The Health dashboard names them.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(kube_pod_status_unschedulable) or vector(0)",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "id": 6,
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "CPU requested",
+      "description": "Sum of the CPU requests of every pod on the node, as a share of allocatable.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "100 * sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))) / sum(kube_node_status_allocatable{resource=\"cpu\"})",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 85
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      },
       "id": 7,
       "gridPos": {
         "h": 3,
-        "w": 6,
-        "x": 6,
+        "w": 5,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "CPU free to schedule",
+      "description": "Allocatable minus requested, in millicores.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1000 * (sum(kube_node_status_allocatable{resource=\"cpu\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))))",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:m",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 200
+              },
+              {
+                "color": "green",
+                "value": 500
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "id": 8,
+      "gridPos": {
+        "h": 3,
+        "w": 5,
+        "x": 5,
+        "y": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "CPU rolling-update headroom",
+      "description": "Free CPU requests left after the largest RollingUpdate Deployment starts its replacement pod. The same trap as memory: in November 2026 only 140m was free against authentik-server's 200m.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1000 * ((sum(kube_node_status_allocatable{resource=\"cpu\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))) - max(label_replace(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) * on (namespace, pod) group_left (owner_name) kube_pod_owner{owner_kind=\"ReplicaSet\"}, \"deployment\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\") and on (namespace, deployment) (kube_deployment_spec_strategy_rollingupdate_max_surge > 0)))",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:m",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 100
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "id": 9,
+      "gridPos": {
+        "h": 3,
+        "w": 5,
+        "x": 10,
         "y": 4
       }
     },
@@ -557,18 +692,18 @@
         "orientation": "auto",
         "wideLayout": true
       },
-      "id": 8,
+      "id": 10,
       "gridPos": {
         "h": 3,
-        "w": 6,
-        "x": 12,
+        "w": 5,
+        "x": 15,
         "y": 4
       }
     },
     {
       "type": "stat",
-      "title": "Unschedulable pods",
-      "description": "Pods the scheduler has given up placing for now, almost always for lack of requestable memory or CPU. The Health dashboard names them.",
+      "title": "Pods on node",
+      "description": "Running and pending pods, against the kubelet's limit of 110 per node - the third budget the scheduler checks.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -579,7 +714,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(kube_pod_status_unschedulable) or vector(0)",
+          "expr": "count((max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1) and on (namespace, pod) kube_pod_info{node!=\"\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -596,8 +731,12 @@
                 "value": null
               },
               {
+                "color": "orange",
+                "value": 90
+              },
+              {
                 "color": "red",
-                "value": 1
+                "value": 100
               }
             ]
           },
@@ -622,11 +761,11 @@
         "orientation": "auto",
         "wideLayout": true
       },
-      "id": 9,
+      "id": 11,
       "gridPos": {
         "h": 3,
-        "w": 6,
-        "x": 18,
+        "w": 4,
+        "x": 20,
         "y": 4
       }
     },
@@ -653,7 +792,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "expr": "sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))",
           "refId": "B",
           "legendFormat": "Requested"
         },
@@ -764,7 +903,7 @@
           "sort": "desc"
         }
       },
-      "id": 10,
+      "id": 12,
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -795,7 +934,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "expr": "sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))",
           "refId": "B",
           "legendFormat": "Requested"
         },
@@ -907,7 +1046,7 @@
           "sort": "desc"
         }
       },
-      "id": 11,
+      "id": 13,
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -920,7 +1059,7 @@
       "title": "Namespaces: requested against used",
       "collapsed": false,
       "panels": [],
-      "id": 12,
+      "id": 14,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -1068,7 +1207,7 @@
           "sort": "none"
         }
       },
-      "id": 13,
+      "id": 15,
       "gridPos": {
         "h": 16,
         "w": 12,
@@ -1216,7 +1355,7 @@
           "sort": "none"
         }
       },
-      "id": 14,
+      "id": 16,
       "gridPos": {
         "h": 16,
         "w": 12,
@@ -1229,7 +1368,7 @@
       "title": "Containers",
       "collapsed": false,
       "panels": [],
-      "id": 15,
+      "id": 17,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -1687,7 +1826,7 @@
           }
         ]
       },
-      "id": 16,
+      "id": 18,
       "gridPos": {
         "h": 20,
         "w": 24,
@@ -1700,7 +1839,7 @@
       "title": "Trends",
       "collapsed": false,
       "panels": [],
-      "id": 17,
+      "id": 19,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -1765,7 +1904,7 @@
           "sort": "desc"
         }
       },
-      "id": 18,
+      "id": 20,
       "gridPos": {
         "h": 10,
         "w": 12,
@@ -1831,7 +1970,7 @@
           "sort": "desc"
         }
       },
-      "id": 19,
+      "id": 21,
       "gridPos": {
         "h": 10,
         "w": 12,

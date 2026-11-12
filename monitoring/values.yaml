@@ -210,6 +210,97 @@ prometheus-node-exporter:
     limits:
       memory: 96Mi
 
+# --- Logs --------------------------------------------------------------------
+#
+# VictoriaLogs, created by the same operator as VMSingle. The chart points
+# VLAgent at it and adds it to Grafana as a datasource on its own; see
+# README.md, "Logs".
+
+vlsingle:
+  enabled: true
+  spec:
+    retentionPeriod: 30d
+    # A ceiling under the claim, so a log storm deletes the oldest days
+    # instead of filling the volume.
+    retentionMaxDiskSpaceUsageBytes: 8GiB
+
+    storage:
+      storageClassName: local-path-core
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
+
+    # The limit is for queries: a wide search over many days is what grows
+    # it, not ingestion, which is a few hundred lines a minute here.
+    resources:
+      requests:
+        cpu: 25m
+        memory: 128Mi
+      limits:
+        memory: 1Gi
+
+# One pod per node (a DaemonSet), so one here.
+vlagent:
+  enabled: true
+  spec:
+    # Every container's stdout/stderr, from /var/log/pods, with namespace, pod
+    # and container attached.
+    k8sCollector:
+      enabled: true
+
+    # The host's own logs: k3s itself, systemd, sshd, dnf. They are in the
+    # binary journal, which vlagent cannot read, but the host also runs
+    # rsyslog, which writes them out as text. Mounted under /host so the path
+    # cannot collide with whatever the operator mounts for k8sCollector.
+    # /var/log/messages is ~100MB a week, almost all of it k3s.
+    extraArgs:
+      fileCollector.glob: /host/var/log/messages,/host/var/log/secure
+    volumes:
+      - name: host-var-log
+        hostPath:
+          path: /var/log
+          type: Directory
+    volumeMounts:
+      - name: host-var-log
+        mountPath: /host/var/log
+        readOnly: true
+
+    resources:
+      requests:
+        cpu: 25m
+        memory: 48Mi
+      limits:
+        memory: 256Mi
+
+# With both VMSingle and VLSingle present, the chart puts a small VMAuth in
+# front of VMAlert's datasource: /select/logsql/ goes to VictoriaLogs, the rest
+# to VMSingle, so rules can be written against logs too. It is one more hop
+# for every rule evaluation, which is why it gets explicit, small resources
+# rather than the operator's defaults.
+internal:
+  vmauth:
+    spec:
+      port: "8427"
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          memory: 128Mi
+
+# The chart's entry, renamed from "VictoriaLogs (DS)". Keep the uid: anything
+# saved against this datasource refers to it by uid.
+defaultDatasources:
+  victorialogs:
+    datasources:
+      - name: VictoriaLogs
+        access: proxy
+        uid: VictoriaLogs
+        type: victoriametrics-logs-datasource
+        plugin: true
+
 # --- Grafana -----------------------------------------------------------------
 
 # The chart's ~40 stock dashboards (Windows, AIX and Darwin nodes, multicluster,
@@ -229,6 +320,12 @@ grafana:
     existingSecret: grafana-admin
     userKey: admin-user
     passwordKey: admin-password
+
+  # The datasource type for VictoriaLogs. Downloaded from grafana.com when the
+  # pod starts, so a Grafana restart needs internet. The chart only adds the
+  # VictoriaLogs datasource when its plugin is listed here.
+  plugins:
+    - victoriametrics-logs-datasource
 
   envValueFrom:
     GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET:

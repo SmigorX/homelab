@@ -13,6 +13,9 @@ is the reference.
 | Alertmanager | Groups alerts, posts to Discord | `kubectl port-forward` |
 | Grafana | Dashboards | `grafana.k8s.internal.smigorx.eu`, Authentik |
 | kube-state-metrics, node-exporter | Kubernetes object and host metrics | — |
+| VLSingle | Stores logs, 30 days | Grafana, *Explore → VictoriaLogs* |
+| VLAgent | Ships pod logs and the host's syslog to VLSingle | — |
+| VMAuth (`vmks-internal`) | Routes VMAlert's queries to VMSingle or VLSingle | in-cluster only |
 
 The VictoriaMetrics operator turns the VM* custom resources into those
 Deployments, and also converts any Prometheus-operator `ServiceMonitor` it
@@ -56,9 +59,29 @@ indefinitely. A second round of trims made that room:
 The rule since then: **free requestable memory must stay above the largest
 memory request of any RollingUpdate Deployment** (768Mi, Authentik and
 Paperless). Recreate Deployments and StatefulSets replace in place and do not
-count. The *Resources* dashboard computes exactly this as *Rolling-update
+count. The *Resources* dashboard computes exactly this as *Memory rolling-update
 headroom*. When it goes red, its *Memory by namespace* chart and container table
 show where requests are far above use.
+
+**The same holds for CPU**, which ran out next: after the memory trims, 140m
+of CPU requests was free against authentik-server's 200m, so its next rollout
+would have stuck the same way. CPU requests had been set by habit (100m) for
+containers idling at 1–20m. A third round, CPU only:
+
+| Workload | CPU request before | after | Average use at the time |
+| --- | --- | --- | --- |
+| immich-server | 150m | 50m | ~4m, bursts past 150m on uploads |
+| immich-machine-learning | 100m | 50m | ~3m |
+| OnlyOffice | 150m | 50m | ~1m |
+| Radarr, Sonarr | 100m each | 50m each | ~2–4m |
+| Home Assistant | 100m | 50m | ~1m |
+
+No container here has a CPU limit, so a lower request never caps a burst. What
+it changes is the share a container gets while the CPU is contended, which on
+this node means during a Jellyfin transcode. *CPU rolling-update headroom* on the
+*Resources* dashboard tracks the CPU side of the rule. Both stats count init
+containers the way the scheduler does; without that they came out 50m short,
+because of Forgejo's.
 
 ## k3s specifics
 
@@ -185,6 +208,29 @@ ConfigMap permissions together with the dashboards:
 
     kubectl -n monitoring delete configmap -l app.kubernetes.io/managed-by=sync-job,grafana_dashboard=1
 
+## Logs
+
+VLSingle keeps 30 days of logs, and at most 8GiB of them, on a 10Gi
+`local-path-core` claim. VLAgent runs on the node and sends it two things:
+
+- **Every container's output**, read from `/var/log/pods`, with `namespace`,
+  `pod` and `container` attached. A pod's logs outlive the pod.
+- **The host's syslog**: `/var/log/messages` (k3s itself, systemd, kernel,
+  dnf) and `/var/log/secure` (sshd, sudo), tagged with `file`. These come from
+  the systemd journal, which vlagent cannot read, through the rsyslog the
+  Fedora host also runs. If rsyslog is ever removed from the host, these two
+  stop and the journal is the only copy left.
+
+Search them in Grafana under *Explore*, datasource *VictoriaLogs*, in
+[LogsQL](https://docs.victoriametrics.com/victorialogs/logsql/):
+
+    {kubernetes.pod_namespace="authentik"} error
+    {file="/host/var/log/messages"} k3s
+
+The chart also routes VMAlert through a small VMAuth (`vmks-internal`), so a
+VMRule can alert on log queries as well as metrics. VMAlert now depends on it:
+if it is down, no rule is evaluated.
+
 ## Alerting
 
 Alertmanager posts `warning` and `critical` alerts to Discord, resolved ones
@@ -213,10 +259,11 @@ The UIs, when needed:
 
 ## Storage
 
-`vmsingle-vmks` (10Gi, `local-path-core`) holds the metrics, and
+`vmsingle-vmks` (10Gi, `local-path-core`) holds the metrics,
+`vlsingle-vmks` (10Gi, `local-path-core`) the logs, and
 `vmks-grafana` (1Gi, `local-path-core`) holds Grafana's SQLite database —
 users, preferences, anything built by hand in the UI. The dashboards in
-`manifests/dashboards/` are re-created from Git and need no backup. Neither claim may fall back
+`manifests/dashboards/` are re-created from Git and need no backup. None of the claims may fall back
 to k3s's default `local-path` class, which is node-local and
 `reclaimPolicy: Delete`.
 
@@ -232,6 +279,8 @@ to k3s's default `local-path` class, which is node-local and
 - Default rules are fetched by a sync Job that runs as a PostSync hook. What
   it creates is owned by its ServiceAccount, which Argo CD tracks, so they are
   cleaned up with the app rather than orphaned.
+- Grafana installs the `victoriametrics-logs-datasource` plugin from
+  grafana.com at start-up, so a Grafana restart needs internet access.
 - `manifests/` is a kustomization, which Argo CD detects on its own, only so
   the dashboards can stay `.json` files. Its other files are listed under
   `resources:`, so a new manifest there needs a line too.
