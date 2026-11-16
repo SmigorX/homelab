@@ -12,7 +12,8 @@ metadata:
     gethomepage.dev/icon: radarr.png
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
-    traefik.ingress.kubernetes.io/router.middlewares: arr-stack-authentik@kubernetescrd
+    # No forward auth middleware: Radarr does its own OIDC login. See
+    # arr-stack/README.md, "Radarr: OIDC".
 spec:
   ingressClassName: traefik
 

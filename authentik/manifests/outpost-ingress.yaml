@@ -67,18 +67,7 @@ spec:
                 port:
                   number: 80
 
-    - host: radarr.k8s.internal.smigorx.eu
-      http:
-        paths:
-          - path: /outpost.goauthentik.io
-            pathType: Prefix
-            backend:
-              service:
-                name: authentik-server
-                port:
-                  number: 80
-
-  # One certificate with four names, separate from the ones the applications'
+  # One certificate with three names, separate from the ones the applications'
   # own Ingresses hold: a Secret cannot be read across namespaces, so this
   # router needs its own copy even though the hostnames are already covered.
   tls:
@@ -86,10 +75,9 @@ spec:
         - qbittorrent.k8s.internal.smigorx.eu
         - prowlarr.k8s.internal.smigorx.eu
         - sonarr.k8s.internal.smigorx.eu
-        - radarr.k8s.internal.smigorx.eu
       secretName: arr-stack-outpost-tls
 ---
-# Alertmanager's outpost path, for the same reason as the four above. A
+# Alertmanager's outpost path, for the same reason as the three above. A
 # separate Ingress rather than a fifth rule there, so the arr apps' certificate
 # is not reissued and the name keeps saying what it holds.
 apiVersion: networking.k8s.io/v1

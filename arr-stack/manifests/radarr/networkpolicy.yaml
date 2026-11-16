@@ -1,0 +1,34 @@
+# Who may reach Radarr at all. Radarr does its own OIDC login, so unlike its
+# neighbours it has no local-address bypass and does not hand its API key to
+# whoever asks. This is defence in depth rather than the only lock: the API
+# still answers anyone holding the key. See arr-stack/README.md, "Authentik".
+#
+# Prowlarr pushes its indexers into Radarr.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: radarr
+  namespace: arr-stack
+spec:
+  podSelector:
+    matchLabels:
+      app: radarr
+
+  policyTypes:
+    - Ingress
+
+  ingress:
+    - from:
+        # Traefik, which only lets through what Authentik approved.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+        - podSelector:
+            matchLabels:
+              app: prowlarr
+      ports:
+        - port: 7878
+          protocol: TCP

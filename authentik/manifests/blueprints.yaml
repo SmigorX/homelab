@@ -560,8 +560,8 @@ data:
         attrs:
           enabled: true
 
-  # qBittorrent, Prowlarr, Sonarr and Radarr. Like Uptime Kuma these have no
-  # SSO of their own, so they sit behind forward auth - but unlike Uptime Kuma
+  # qBittorrent, Prowlarr and Sonarr. Like Uptime Kuma these have no SSO of
+  # their own, so they sit behind forward auth - but unlike Uptime Kuma
   # each gets its own provider in forward_single mode.
   #
   # Not domain level: a forward_domain provider claims an entire cookie
@@ -578,7 +578,7 @@ data:
     metadata:
       name: Arr Stack forward auth applications
       labels:
-        blueprints.goauthentik.io/description: qBittorrent, Prowlarr, Sonarr and Radarr forward auth
+        blueprints.goauthentik.io/description: qBittorrent, Prowlarr and Sonarr forward auth
 
     entries:
       - model: authentik_providers_proxy.proxyprovider
@@ -648,33 +648,12 @@ data:
           provider: !KeyOf sonarr-provider
           policy_engine_mode: any
 
-      - model: authentik_providers_proxy.proxyprovider
-        id: radarr-provider
-        identifiers:
-          name: radarr
-        attrs:
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          mode: forward_single
-          external_host: https://radarr.k8s.internal.smigorx.eu
-
-      - model: authentik_core.application
-        id: radarr-app
-        identifiers:
-          slug: radarr
-        attrs:
-          name: Radarr
-          group: Media Management
-          meta_launch_url: https://radarr.k8s.internal.smigorx.eu
-          provider: !KeyOf radarr-provider
-          policy_engine_mode: any
-
       # Admins only, deliberately narrower than Uptime Kuma's guests-and-admins.
-      # These four can start downloads, rewrite the library and read every
+      # These three can start downloads, rewrite the library and read every
       # indexer credential in Prowlarr; a status page they are not.
       #
       # An application with no bindings at all is open to every authenticated
-      # user, so each of the four needs its own - there is no inheritance and a
+      # user, so each of the three needs its own - there is no inheritance and a
       # superuser gets no implicit pass.
       - model: authentik_policies.policybinding
         identifiers:
@@ -700,6 +679,76 @@ data:
         attrs:
           enabled: true
 
+  # Radarr has had its own OIDC login since v7, so unlike its neighbours in
+  # arr-stack.yaml it is an ordinary OAuth2 client rather than forward auth.
+  # Its settings are environment variables in
+  # arr-stack/manifests/radarr/deployment.yaml.
+  radarr.yaml: |
+    version: 1
+    metadata:
+      name: Radarr OIDC application
+      labels:
+        blueprints.goauthentik.io/description: Radarr single sign-on configuration
+
+    entries:
+      # The forward_single provider Radarr used to sit behind. It goes first:
+      # a proxy provider is an OAuth2 provider underneath and provider names
+      # are unique, so while it exists the entry below would find it and
+      # rewrite it in place instead of creating a real OAuth2 one. A no-op
+      # once it is gone.
+      - model: authentik_providers_proxy.proxyprovider
+        state: absent
+        identifiers:
+          name: radarr
+
+      - model: authentik_providers_oauth2.oauth2provider
+        id: radarr-provider
+        identifiers:
+          name: radarr
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+
+          client_type: confidential
+          client_id: radarr
+          client_secret: !Env RADARR_OIDC_CLIENT_SECRET
+          grant_types:
+            - authorization_code
+            - refresh_token
+
+          # ASP.NET's default OIDC callback and signed-out paths; Radarr sets
+          # neither. Only right while Radarr trusts Traefik's
+          # X-Forwarded-Proto (TrustedNetworks in the Deployment), or it
+          # sends http:// here.
+          redirect_uris:
+            - matching_mode: strict
+              url: https://radarr.k8s.internal.smigorx.eu/signin-oidc
+            - matching_mode: strict
+              url: https://radarr.k8s.internal.smigorx.eu/signout-callback-oidc
+
+          property_mappings:
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
+            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
+
+          signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+
+      # The slug is in the authority URL the Deployment points at:
+      # /application/o/<slug>/.
+      - model: authentik_core.application
+        id: radarr-app
+        identifiers:
+          slug: radarr
+        attrs:
+          name: Radarr
+          group: Media Management
+          meta_launch_url: https://radarr.k8s.internal.smigorx.eu
+          provider: !KeyOf radarr-provider
+          policy_engine_mode: any
+
+      # Radarr itself admits a single `sub`, akadmin's. This binding is the
+      # other lock: anyone else is refused at Authentik rather than at
+      # Radarr's "not authorized" page.
       - model: authentik_policies.policybinding
         identifiers:
           target: !KeyOf radarr-app
@@ -781,5 +830,4 @@ data:
             - !Find [authentik_providers_proxy.proxyprovider, [name, qbittorrent]]
             - !Find [authentik_providers_proxy.proxyprovider, [name, prowlarr]]
             - !Find [authentik_providers_proxy.proxyprovider, [name, sonarr]]
-            - !Find [authentik_providers_proxy.proxyprovider, [name, radarr]]
             - !Find [authentik_providers_proxy.proxyprovider, [name, alertmanager]]

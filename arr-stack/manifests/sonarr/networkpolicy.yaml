@@ -1,0 +1,36 @@
+# Who may reach sonarr at all. It skips its own login for local addresses
+# (Settings → General → Authentication Required → "Disabled for Local
+# Addresses"), which includes every pod IP, and its UI hands any client so
+# admitted the API key. Authentik in front of Traefik is the real login; this
+# keeps the rest of the cluster from walking around it. See
+# arr-stack/README.md, "Authentik".
+#
+# Prowlarr pushes its indexers into Sonarr.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sonarr
+  namespace: arr-stack
+spec:
+  podSelector:
+    matchLabels:
+      app: sonarr
+
+  policyTypes:
+    - Ingress
+
+  ingress:
+    - from:
+        # Traefik, which only lets through what Authentik approved.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+        - podSelector:
+            matchLabels:
+              app: prowlarr
+      ports:
+        - port: 8989
+          protocol: TCP

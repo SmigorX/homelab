@@ -9,7 +9,7 @@ qBittorrent, Prowlarr, Sonarr, Radarr, FlareSolverr and Jellyfin, all in the
 | qBittorrent | `qbittorrent.k8s.internal.smigorx.eu` | Authentik forward auth |
 | Prowlarr | `prowlarr.k8s.internal.smigorx.eu` | Authentik forward auth |
 | Sonarr | `sonarr.k8s.internal.smigorx.eu` | Authentik forward auth |
-| Radarr | `radarr.k8s.internal.smigorx.eu` | Authentik forward auth |
+| Radarr | `radarr.k8s.internal.smigorx.eu` | its own OIDC login, against Authentik |
 | Jellyfin | `jellyfin.k8s.internal.smigorx.eu` | its own accounts |
 | FlareSolverr | none | none, ClusterIP only |
 
@@ -106,8 +106,8 @@ Sonarr and Radarr see no library and would re-grab everything already on disk.
 
 ## Authentik
 
-Unlike Uptime Kuma, the four gated apps each get their **own** provider in
-`forward_single` mode, bound to `authentik Admins` only. They can start
+qBittorrent, Prowlarr and Sonarr have no SSO of their own. Unlike Uptime Kuma,
+each gets its **own** forward auth provider in `forward_single` mode, bound to `authentik Admins` only. They can start
 downloads, rewrite the library and read every indexer credential in Prowlarr; a
 guest-readable status page they are not.
 
@@ -124,7 +124,7 @@ that this Traefik refuses to route. The way around it is to stop routing that
 path from the application's namespace: `Host` is a routing rule, not a property
 of a namespace, so `authentik/manifests/outpost-ingress.yaml` sits beside
 `authentik-server`, names it as an ordinary local Service, and claims that one
-path on each of the four hosts. Traefik ranks routers by rule specificity, so it
+path on each of the three hosts. Traefik ranks routers by rule specificity, so it
 wins over the application's `/` and everything else still reaches the app.
 
 The embedded outpost's provider list lives in its own blueprint key,
@@ -134,6 +134,77 @@ defined in another blueprint, hence `!Find` by name. **Every future forward auth
 provider belongs in that list.** A missing entry does not error; the outpost
 just stops answering for that host.
 
+### Radarr: OIDC
+
+Since v7, Radarr has an OIDC login of its own, so it is an ordinary OAuth2 client
+like Grafana: the `radarr.yaml` key in `authentik/manifests/blueprints.yaml`,
+with no Middleware and no outpost path. All of its settings are environment
+variables in [manifests/radarr/deployment.yaml](manifests/radarr/deployment.yaml),
+which take precedence over `config.xml`, so the UI cannot change them.
+
+- **Exactly one user.** Radarr admits a single verified email or `sub`. The
+  Deployment names akadmin's `sub`, and the Authentik binding also limits the
+  app to `authentik Admins`. Someone added to that group still gets Radarr's
+  "not authorized" page until `Radarr__Auth__OidcUserIdentifier` names them.
+  An email address would only work if Authentik reported it as verified.
+- **`TrustedNetworks` is what keeps the login working.** Without
+  `10.42.0.0/16`, Radarr ignores Traefik's `X-Forwarded-Proto`, sends
+  `http://…/signin-oidc` as the redirect URI, and Authentik's strict match
+  rejects it.
+- **Locked out?** Remove the `Radarr__Auth__*` variables (or set
+  `Radarr__Auth__Method` to `Forms`) and Radarr falls back to the
+  username and password in its `config.xml`.
+
+The client secret has two copies that must stay equal:
+
+| Vault path | Read by |
+| --- | --- |
+| `secret/authentik/oidc`, key `radarr-client-secret` | Authentik, through `RADARR_OIDC_CLIENT_SECRET` |
+| `secret/arr-stack/radarr-oidc`, key `client-secret` | Radarr, through the `radarr-oidc` Secret |
+
+Set them up as described in `authentik/README.md`, "Adding an OIDC application".
+Use `patch` for the first one.
+
+### The forward auth apps have no login of their own
+
+Behind forward auth, each app's own login would only be a second password
+prompt, so qBittorrent, Sonarr and Prowlarr skip it for in-cluster clients.
+Traefik's requests come from its pod IP, so whoever got past Authentik lands
+straight in the UI. These settings live in each app's `/config`, not in Git:
+
+| App | Setting |
+| --- | --- |
+| qBittorrent | Options → Web UI → *Bypass authentication for clients in whitelisted IP subnets*: `10.42.0.0/16` |
+| Sonarr, Prowlarr | Settings → General → *Authentication Required*: Disabled for Local Addresses |
+
+"Local addresses" means every private range, so every pod qualifies.
+
+On their own, these bypasses would give every pod in the cluster the apps
+unauthenticated. The *arr UIs hand the API key to any client they let in, and
+qBittorrent's API can add torrents and delete files. A NetworkPolicy beside each
+app narrows who can reach it. Radarr has one too, as defence in depth:
+
+| App | Reachable from |
+| --- | --- |
+| qBittorrent | Traefik, Sonarr, Radarr, Prowlarr |
+| Sonarr, Radarr | Traefik, Prowlarr (which pushes indexers into them) |
+| Prowlarr | Traefik, Sonarr, Radarr (which search through it) |
+
+**Never enable a bypass without its policy in place.** Anything else that needs
+one of these APIs, such as a Homepage widget or an Uptime Kuma monitor on the
+internal address, needs an entry in that app's policy first.
+
+Sonarr and Radarr can keep the qBittorrent credentials they have. qBittorrent
+ignores them for whitelisted clients.
+
+To check that the policies are enforced, run this from a pod they do not admit.
+Every line must time out:
+
+    kubectl -n default run np-test --rm -i --restart=Never --image=curlimages/curl -- sh -c '
+      for u in qbittorrent:8080 sonarr:8989 radarr:7878 prowlarr:9696; do
+        printf "%s " $u; curl -sS -o /dev/null -w "%{http_code}\n" --max-time 5 http://$u.arr-stack.svc.cluster.local/ 2>&1 | tail -1
+      done'
+
 ### This fails open
 
 Same trap as Uptime Kuma. `traefik.ingress.kubernetes.io/router.middlewares`
@@ -141,7 +212,7 @@ takes a `<namespace>-<name>@kubernetescrd` string that nothing validates — dro
 it, rename the namespace, rename the Middleware, and Traefik serves the app with
 no authentication at all. Worth an actual check after any rename:
 
-    for h in qbittorrent prowlarr sonarr radarr; do
+    for h in qbittorrent prowlarr sonarr; do
       printf '%s ' $h
       curl -sk -o /dev/null -w '%{http_code}\n' https://$h.k8s.internal.smigorx.eu/
     done

@@ -1,0 +1,53 @@
+# What makes qBittorrent's own login safe to switch off.
+#
+# Authentik is the only login: qBittorrent's WebUI skips authentication for
+# clients in the pod network (Options → Web UI → "Bypass authentication for
+# clients in whitelisted IP subnets", 10.42.0.0/16 - see arr-stack/README.md,
+# "Authentik"). Traefik's requests come from its pod IP, so a browser that got
+# past the forward auth middleware lands straight in the UI.
+#
+# That bypass alone would hand every pod in the cluster an unauthenticated API
+# that can add torrents and delete files. This policy narrows "every pod" to
+# the four that have a reason to talk to it. The bypass must never be enabled
+# without this policy in place.
+#
+# Enforced by the NetworkPolicy controller built into k3s (kube-router).
+# Replies to qBittorrent's own outbound connections - WireGuard's UDP included -
+# are established traffic and pass regardless.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: qbittorrent
+  namespace: arr-stack
+spec:
+  podSelector:
+    matchLabels:
+      app: qbittorrent
+
+  policyTypes:
+    - Ingress
+
+  ingress:
+    - from:
+        # Traefik, which only lets through what Authentik approved.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+
+        # The download client's actual users.
+        - podSelector:
+            matchLabels:
+              app: sonarr
+        - podSelector:
+            matchLabels:
+              app: radarr
+        - podSelector:
+            matchLabels:
+              app: prowlarr
+      ports:
+        # The container port, not the Service's.
+        - port: 8080
+          protocol: TCP

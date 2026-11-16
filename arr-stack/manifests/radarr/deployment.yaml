@@ -25,7 +25,7 @@ spec:
 
       containers:
         - name: radarr
-          image: lscr.io/linuxserver/radarr:6.4.4.10685-ls317
+          image: lscr.io/linuxserver/radarr:7.0.3.10918-ls328
 
           env:
             - name: PUID
@@ -36,6 +36,37 @@ spec:
 
             - name: TZ
               value: Europe/Warsaw
+
+            # Radarr's own OIDC login (new in v7), against the radarr.yaml
+            # blueprint in authentik/manifests/blueprints.yaml. Every setting is
+            # an environment variable, which takes precedence over config.xml,
+            # so the UI cannot drift it. See arr-stack/README.md, "Radarr: OIDC".
+            - name: Radarr__Auth__Method
+              value: Oidc
+            - name: Radarr__Auth__Required
+              value: Enabled
+            - name: Radarr__Auth__OidcAuthority
+              value: https://auth.k8s.internal.smigorx.eu/application/o/radarr/
+            - name: Radarr__Auth__OidcClientId
+              value: radarr
+            - name: Radarr__Auth__OidcClientSecret
+              valueFrom:
+                secretKeyRef:
+                  name: radarr-oidc
+                  key: client-secret
+
+            # Radarr admits exactly one identity: a verified email or a `sub`.
+            # This is akadmin's `sub` (Authentik's hashed_user_id), the one
+            # member of authentik Admins - which the Authentik binding also
+            # requires. Not a secret; it identifies, it does not authenticate.
+            - name: Radarr__Auth__OidcUserIdentifier
+              value: 544c5460c58b7d88c55ab44fbcad9667c58873fd803857f13c7fd586eb23b956
+
+            # Traefik's pod IPs. Without this Radarr ignores X-Forwarded-Proto,
+            # builds an http:// redirect URI, and Authentik's strict match
+            # rejects the login.
+            - name: Radarr__Server__TrustedNetworks
+              value: 10.42.0.0/16
 
           ports:
             - name: http

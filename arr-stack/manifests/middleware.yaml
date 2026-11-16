@@ -1,8 +1,10 @@
-# Forward auth for the four apps in this namespace that cannot authenticate
-# themselves to anyone's satisfaction: qBittorrent, Prowlarr, Sonarr and Radarr.
+# Forward auth for the three apps in this namespace that cannot authenticate
+# themselves to anyone's satisfaction: qBittorrent, Prowlarr and Sonarr.
 # Each has its own forward_single provider in Authentik, bound to authentik
-# Admins; one Middleware serves all four because the outpost picks the
+# Admins; one Middleware serves all three because the outpost picks the
 # provider by the request's Host. See arr-stack/README.md, "Authentik".
+#
+# Radarr does not use this: it has had its own OIDC login since v7.
 #
 # Jellyfin deliberately does not use this: it has its own accounts and is meant
 # to be opened by people who have no Authentik login.

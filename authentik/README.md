@@ -22,6 +22,7 @@ by the chart, and Authentik reconciles each `.yaml` key as one blueprint.
 | `grafana.yaml` | OIDC | `authentik Admins` only |
 | `uptime-kuma.yaml` | forward auth, domain level | `guests` and `authentik Admins` |
 | `arr-stack.yaml` | forward auth, one `forward_single` provider per app | `authentik Admins` only |
+| `radarr.yaml` | OIDC; Radarr also admits only one `sub` | `authentik Admins` only |
 | `alertmanager.yaml` | forward auth, `forward_single` | `authentik Admins` only |
 | `proxy-outpost.yaml` | — | the embedded outpost's provider list |
 

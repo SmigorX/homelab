@@ -75,6 +75,12 @@ global:
           name: authentik-oidc-secrets
           key: grafana-client-secret
 
+    - name: RADARR_OIDC_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: authentik-oidc-secrets
+          key: radarr-client-secret
+
 authentik:
   log_level: info
 
