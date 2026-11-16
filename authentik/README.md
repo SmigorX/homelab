@@ -22,6 +22,7 @@ by the chart, and Authentik reconciles each `.yaml` key as one blueprint.
 | `grafana.yaml` | OIDC | `authentik Admins` only |
 | `uptime-kuma.yaml` | forward auth, domain level | `guests` and `authentik Admins` |
 | `arr-stack.yaml` | forward auth, one `forward_single` provider per app | `authentik Admins` only |
+| `alertmanager.yaml` | forward auth, `forward_single` | `authentik Admins` only |
 | `proxy-outpost.yaml` | — | the embedded outpost's provider list |
 
 "Everyone" means every Authentik account: an application with no policy
@@ -45,7 +46,7 @@ Some apps keep half of their setup outside this repo:
   [forgejo/README.md](../forgejo/README.md).
 - **The forward-auth apps** have no SSO of their own. Traefik asks Authentik
   about each request through a Middleware in the app's namespace. The arr
-  apps' providers also need `/outpost.goauthentik.io/` routed on their own
+  apps' and Alertmanager's providers also need `/outpost.goauthentik.io/` routed on their own
   hosts, which [manifests/outpost-ingress.yaml](manifests/outpost-ingress.yaml)
   does; see [arr-stack/README.md](../arr-stack/README.md).
 

@@ -8,6 +8,7 @@ resources:
   - vault-secret.yaml
   - scrapes.yaml
   - rules.yaml
+  - middleware.yaml
 
 # One ConfigMap, one key per dashboard. Grafana's dashboard sidecar picks up
 # anything in this namespace with the grafana_dashboard label and writes each

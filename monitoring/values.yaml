@@ -132,6 +132,11 @@ kubelet:
 
 alertmanager:
   spec:
+    # What Alertmanager puts in the links it generates: its own UI, and the
+    # silence links in notifications. Left empty it is the pod's address,
+    # which nobody outside the cluster can open.
+    externalURL: https://alertmanager.k8s.internal.smigorx.eu
+
     resources:
       requests:
         cpu: 10m
@@ -150,6 +155,32 @@ alertmanager:
       - name: discord
         mountPath: /etc/alertmanager/discord
         readOnly: true
+
+  # Alertmanager has no authentication of its own, and its UI can create and
+  # expire silences, so it is behind Authentik forward auth: the middleware is
+  # manifests/middleware.yaml, the provider the alertmanager.yaml key of
+  # authentik/manifests/blueprints.yaml. See README.md, "Alertmanager UI".
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+      # <namespace>-<name>@kubernetescrd. Nothing validates this string: get
+      # it wrong and Traefik serves Alertmanager with no authentication.
+      traefik.ingress.kubernetes.io/router.middlewares: monitoring-authentik@kubernetescrd
+      gethomepage.dev/enabled: "true"
+      gethomepage.dev/name: Alertmanager
+      gethomepage.dev/description: Firing alerts and silences
+      gethomepage.dev/group: Infrastructure
+      gethomepage.dev/icon: alertmanager.png
+    hosts:
+      - alertmanager.k8s.internal.smigorx.eu
+    tls:
+      - secretName: alertmanager-tls
+        hosts:
+          - alertmanager.k8s.internal.smigorx.eu
 
   # The Slack templates; nothing here uses Slack.
   monzoTemplate:

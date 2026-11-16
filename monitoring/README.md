@@ -10,7 +10,7 @@ is the reference.
 | VMSingle | Stores metrics, 30 days | in-cluster only |
 | VMAgent | Scrapes every target, writes to VMSingle | in-cluster only |
 | VMAlert | Evaluates the alerting rules | `kubectl port-forward` |
-| Alertmanager | Groups alerts, posts to Discord | `kubectl port-forward` |
+| Alertmanager | Groups alerts, posts to Discord | `alertmanager.k8s.internal.smigorx.eu`, Authentik |
 | Grafana | Dashboards | `grafana.k8s.internal.smigorx.eu`, Authentik |
 | kube-state-metrics, node-exporter | Kubernetes object and host metrics | — |
 | VLSingle | Stores logs, 30 days | Grafana, *Explore → VictoriaLogs* |
@@ -254,9 +254,31 @@ The webhook URL is read from a file mounted from the `alertmanager-discord`
 Secret (`webhook_url_file`), so it never appears in the Alertmanager config
 the operator renders from Git.
 
-The UIs, when needed:
+### Alertmanager UI
 
-    kubectl -n monitoring port-forward svc/vmalertmanager-vmks 9093
+`https://alertmanager.k8s.internal.smigorx.eu`, for `authentik Admins` only.
+Alertmanager has no authentication of its own, and its UI can silence any
+alert, so the chart's Ingress carries the forward-auth Middleware in
+[manifests/middleware.yaml](manifests/middleware.yaml). The provider is
+`forward_single`, like the arr apps' (see `arr-stack/README.md`, "Authentik"),
+and is the `alertmanager.yaml` key of `authentik/manifests/blueprints.yaml`.
+Its `/outpost.goauthentik.io` path is routed by the `alertmanager-outpost`
+Ingress in `authentik/manifests/outpost-ingress.yaml`.
+
+`spec.externalURL` is set to the same host, so the links Alertmanager
+generates point there rather than at the pod.
+
+This fails open the same way the arr apps do: the
+`traefik.ingress.kubernetes.io/router.middlewares` string
+(`monitoring-authentik@kubernetescrd`) is not validated, and a wrong one serves
+Alertmanager with no authentication. After any rename:
+
+    curl -sk -o /dev/null -w '%{http_code}\n' https://alertmanager.k8s.internal.smigorx.eu/
+
+Anything but a redirect to Authentik means it is open.
+
+VMAlert's UI is still not exposed:
+
     kubectl -n monitoring port-forward svc/vmalert-vmks 8080
 
 ## Storage

@@ -708,6 +708,51 @@ data:
         attrs:
           enabled: true
 
+  # Alertmanager has no authentication of its own, and its UI can silence any
+  # alert, so forward auth, admins only. forward_single for the same reason as
+  # the arr apps above: the domain level cookie already belongs to Uptime
+  # Kuma. Its /outpost.goauthentik.io path is in
+  # authentik/manifests/outpost-ingress.yaml, its Middleware in
+  # monitoring/manifests/middleware.yaml.
+  alertmanager.yaml: |
+    version: 1
+    metadata:
+      name: Alertmanager forward auth application
+      labels:
+        blueprints.goauthentik.io/description: Alertmanager forward auth
+
+    entries:
+      - model: authentik_providers_proxy.proxyprovider
+        id: alertmanager-provider
+        identifiers:
+          name: alertmanager
+        attrs:
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: https://alertmanager.k8s.internal.smigorx.eu
+
+      - model: authentik_core.application
+        id: alertmanager-app
+        identifiers:
+          slug: alertmanager
+        attrs:
+          name: Alertmanager
+          group: Infrastructure
+          meta_launch_url: https://alertmanager.k8s.internal.smigorx.eu
+          provider: !KeyOf alertmanager-provider
+          policy_engine_mode: any
+
+      # Without a binding every authenticated user could get in; a superuser
+      # gets no implicit pass once one exists.
+      - model: authentik_policies.policybinding
+        identifiers:
+          target: !KeyOf alertmanager-app
+          group: !Find [authentik_core.group, [name, "authentik Admins"]]
+          order: 0
+        attrs:
+          enabled: true
+
   # The embedded outpost only proxies providers explicitly assigned to it, and
   # the assignment replaces the list rather than adding to it. That makes it
   # one blueprint's job to name all of them, in its own key: left in
@@ -737,3 +782,4 @@ data:
             - !Find [authentik_providers_proxy.proxyprovider, [name, prowlarr]]
             - !Find [authentik_providers_proxy.proxyprovider, [name, sonarr]]
             - !Find [authentik_providers_proxy.proxyprovider, [name, radarr]]
+            - !Find [authentik_providers_proxy.proxyprovider, [name, alertmanager]]

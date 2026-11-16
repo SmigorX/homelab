@@ -88,3 +88,35 @@ spec:
         - sonarr.k8s.internal.smigorx.eu
         - radarr.k8s.internal.smigorx.eu
       secretName: arr-stack-outpost-tls
+---
+# Alertmanager's outpost path, for the same reason as the four above. A
+# separate Ingress rather than a fifth rule there, so the arr apps' certificate
+# is not reissued and the name keeps saying what it holds.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: alertmanager-outpost
+  namespace: authentik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+
+  rules:
+    - host: alertmanager.k8s.internal.smigorx.eu
+      http:
+        paths:
+          - path: /outpost.goauthentik.io
+            pathType: Prefix
+            backend:
+              service:
+                name: authentik-server
+                port:
+                  number: 80
+
+  tls:
+    - hosts:
+        - alertmanager.k8s.internal.smigorx.eu
+      secretName: alertmanager-outpost-tls
