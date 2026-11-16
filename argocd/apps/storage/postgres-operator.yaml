@@ -6,8 +6,6 @@ metadata:
 spec:
   project: storage
 
-  # Two sources rather than one: the chart, and the repo as a values root for
-  # it. Same shape as argocd/apps/storage/local-path-provisioner.yaml.
   sources:
     - repoURL: https://cloudnative-pg.github.io/charts
       chart: cloudnative-pg

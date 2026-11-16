@@ -4,27 +4,21 @@ Argo CD deploys Immich through `argocd/apps/workloads/immich.yaml`, published at
 `immich.k8s.internal.smigorx.eu`. Four components: the server, the machine
 learning service, a Valkey cache, and a CloudNativePG `Cluster` for PostgreSQL.
 
-This is the second application here installed from a Helm chart rather than
-hand-written manifests, and the first user-facing one — Homepage was the other.
 The chart is the official `ghcr.io/immich-app/immich-charts/immich`, pinned in
 the Application; `values.yaml` holds only overrides, and `manifests/` holds what
 the chart deliberately does not provide: the library volume, the database, the
-secret and the Ingress. That split is why the Application has three sources.
+secret and the Ingress.
 
-The chart is OCI-only. The old HTTP repo at `immich-app.github.io/immich-charts`
-is dead, which is why `ghcr.io/immich-app/immich-charts` had to be added to
-`sourceRepos` in `argocd/apps/workloads/project.yaml` — with no `oci://` prefix
-and without the chart name, the same shape as the rancher entry in the storage
-project.
+The chart is OCI-only (the old HTTP repo at `immich-app.github.io` is dead), so
+`argocd/apps/workloads/project.yaml` lists `ghcr.io/immich-app/immich-charts`
+with no `oci://` prefix and no chart name.
 
 ## Storage
 
-The photo library is **mounted in place**. `manifests/pv.yaml` is a static
-`PersistentVolume` whose `hostPath` is the very directory the previous Docker
-install used as `UPLOAD_LOCATION`; nothing was ever copied. It is the only
-`PersistentVolume` in this repo, and it exists because the chart hard-fails
-without `immich.persistence.library.existingClaim` — samba's plain `hostPath` in
-the pod spec is not an option here.
+The photo library is a static `PersistentVolume` in `manifests/pv.yaml` over
+`/mnt/nas/core/immich_library`, a directory that predates this cluster. It is a PV
+because the chart hard-fails without `immich.persistence.library.existingClaim`
+— samba's plain `hostPath` in the pod spec is not an option here.
 
 Three properties of that PV carry weight:
 
@@ -39,15 +33,15 @@ Three properties of that PV carry weight:
 - **`storageClassName: ""` plus `claimRef`.** No provisioner may touch it, and
   no other claim can take it.
 
-Ownership needs nothing. Both the Docker container and this pod run as root, and
-the kubelet performs no recursive `chown` on `hostPath` volumes anyway — which is
-a relief on a library this size, but also means `fsGroup` would fix nothing if
-the ownership were ever wrong.
+Ownership needs nothing. The pod runs as root, and the kubelet performs no
+recursive `chown` on `hostPath` volumes anyway — a relief on a library this
+size, but it also means `fsGroup` would fix nothing if the ownership were ever
+wrong.
 
 `immich-ml-cache` (10Gi, `local-path-bulk`) holds the CLIP and face-recognition
 models. It is a cache, but the chart's default is an `emptyDir`, which
-re-downloads roughly 2Gi of models on every restart — a regression from the
-named volume Docker had. PostgreSQL uses `local-path-core`, 50Gi.
+re-downloads roughly 2Gi of models on every restart. PostgreSQL uses
+`local-path-core`, 50Gi.
 
 There is no `nodeAffinity` on the PV. On one node it would be decoration; on a
 second node it would be mandatory, along with a hard look at whether a hostPath
@@ -73,8 +67,8 @@ see **Single sign-on** below.
 
 ## Database
 
-The `Cluster` differs from the other four in this repo in exactly two ways, and
-both are forced by Immich.
+The `Cluster` differs from the other CloudNativePG clusters in this repo in
+exactly two ways, and both are forced by Immich.
 
 It does not run the stock CloudNativePG image. Immich keeps its face and CLIP
 embeddings in VectorChord indexes, which requires `vchord.so` in
@@ -98,152 +92,26 @@ holds the password.
 
 ## Uploads through Traefik
 
-**Traefik's default `readTimeout` is 60 seconds, and it covers the whole request
-body.** Immich uploads each asset as a single multipart POST rather than
-chunking, so any file that takes longer than a minute to transfer dies at the
-ingress. The Docker install never hit this because it published port 2283
-directly.
-
-**This is a known limitation, deliberately left in place.** Nothing here has
-been changed to work around it, because the fix is cluster-wide and Immich is
-not reason enough on its own — the point will be revisited if it turns out to
-bite in practice. What follows is what that fix would be, not a step anyone has
-taken.
-
-It could not live in this repo in any case. `HelmChartConfig/traefik` in
-`kube-system` already exists and belongs to the k3s addon `traefk-config` —
-note the typo in the name — which is a file under
-`/var/lib/rancher/k3s/server/manifests/` on the host. Argo CD managing the same
-object would fight the k3s addon controller in a loop. So it would be edited
-there, on the host, **keeping the MetalLB annotation already in that file**:
-
-    spec:
-      valuesContent: |-
-        service:
-          annotations:
-            metallb.io/loadBalancerIPs: "192.168.1.11"
-        ports:
-          websecure:
-            transport:
-              respondingTimeouts:
-                readTimeout: 0
-                writeTimeout: 0
-                idleTimeout: 180s
-
-Applying it restarts the ingress for every application here, not just Immich,
-which is most of why it has been deferred. It is recorded in this README
-because nothing in Git will record it otherwise.
+Immich uploads each asset as a single multipart POST rather than chunking, and
+Traefik's `readTimeout` covers the whole request body. Its default would cut
+any upload that takes longer than a minute, so
+[traefik/manifests/traefik-config.yaml](../traefik/manifests/traefik-config.yaml)
+raises the `websecure` timeouts to 10 minutes. A file that takes longer than
+that to send still fails, and the setting applies to every application here,
+not just Immich.
 
 WebSocket upgrades, by contrast, need nothing. The chart labels the service port
 with `appProtocol: kubernetes.io/ws`, but Traefik's Ingress provider never reads
 `appProtocol` — it reads the `service.serversscheme` annotation, which the
 Ingress sets to `http` like every other one here.
 
-## Migrating from Docker
+## Version
 
-The Docker install ran Immich 2.7.4 against `tensorchord/pgvecto-rs:pg16-v0.2.0`
-— PostgreSQL 16 with **pgvecto.rs**, the vector extension Immich deprecated and
-then removed in 3.0. The image here has VectorChord instead, and no dump taken
-straight from that database will restore into it: the embedding columns are
-`vectors.vector(512)`, a type this cluster has never heard of.
-
-So the embeddings are converted to a plain `real[]` before the dump is taken —
-Immich's documented manual migration path, done on the old database while
-pgvecto.rs is still there. The dump that comes out depends on no vector
-extension at all, and the columns are converted back to VectorChord's types
-after the restore. The alternative, running both extensions side by side and
-letting Immich reindex in place, needs a bridge image and a pgvecto.rs upgrade
-first; this way the old installation's software is never touched.
-
-The order is not interchangeable. The two instances must never run at once:
-nothing locks the library, and both will happily write to it.
-
-1. **Take a throwaway dump first.** It is 167MB and it is the only way back to a
-   working Docker instance once step 3 has altered its schema.
-
-        docker compose stop immich-server immich-machine-learning
-        docker exec -t immich_postgres pg_dump --dbname=immich --username=postgres \
-          | gzip > ~/immich-rollback.sql.gz
-
-2. **Read the CLIP dimension.** It depends on the smart search model in use and
-   is needed again in step 7.
-
-        docker exec immich_postgres psql -U postgres -d immich -c "
-          SELECT atttypmod AS dimsize FROM pg_attribute f
-          JOIN pg_class c ON c.oid = f.attrelid
-          WHERE c.relkind = 'r' AND f.attnum > 0
-            AND c.relname = 'smart_search' AND f.attname = 'embedding';"
-
-3. **Strip the vector types out of the old database.**
-
-        docker exec immich_postgres psql -U postgres -d immich -c "
-          DROP INDEX IF EXISTS clip_index;
-          DROP INDEX IF EXISTS face_index;
-          ALTER TABLE smart_search ALTER COLUMN embedding SET DATA TYPE real[];
-          ALTER TABLE face_search ALTER COLUMN embedding SET DATA TYPE real[];
-          DROP EXTENSION vectors;
-          DROP SCHEMA vectors;"
-
-   From here the Docker instance is broken. That is deliberate and it is why
-   step 1 exists.
-
-4. **Dump, then remove the containers.**
-
-        docker exec -t immich_postgres pg_dump --clean --if-exists --no-owner --no-acl \
-          --dbname=immich --username=postgres | gzip > ~/immich-dump.sql.gz
-        docker compose down
-
-   `--no-owner --no-acl` departs from the command in Immich's documentation, and
-   has to: the source role is `postgres` and the target role is `immich`.
-   `down`, not `stop` — a stopped container with `restart: always` comes back on
-   the next reboot.
-
-5. **Sync with `server.enabled: false`** (its committed state) and confirm the
-   database came up with the extensions:
-
-        kubectl -n immich exec -it immich-postgres-1 -- psql -U postgres -d immich -c '\dx'
-
-   Expect `vchord`, `vector`, `cube`, `earthdistance`.
-
-6. **Restore, before the server has ever run.**
-
-        PGPW=$(kubectl -n immich get secret immich-postgres-app -o jsonpath='{.data.password}' | base64 -d)
-        gunzip --stdout ~/immich-dump.sql.gz \
-        | sed "s/SELECT pg_catalog.set_config('search_path', '', false);/SELECT pg_catalog.set_config('search_path', 'public, pg_catalog', true);/g" \
-        | kubectl -n immich exec -i immich-postgres-1 -- \
-            env PGPASSWORD="$PGPW" psql --host=127.0.0.1 --username=immich --dbname=immich \
-              --single-transaction --set ON_ERROR_STOP=on
-
-   The `sed` is from Immich's documentation and is not optional. Restoring
-   *after* the server has migrated an empty database does not work: its tables
-   depend on the extensions the dump tries to drop, and the whole transaction
-   rolls back. `--single-transaction` at least makes a failed attempt a no-op,
-   so it can be fixed and repeated.
-
-7. **Convert the embeddings to VectorChord's types**, substituting the number
-   from step 2 for the CLIP dimension:
-
-        kubectl -n immich exec -it immich-postgres-1 -- psql -U immich -d immich -c "
-          ALTER TABLE smart_search ALTER COLUMN embedding SET DATA TYPE vector(<dimsize>);
-          ALTER TABLE face_search ALTER COLUMN embedding SET DATA TYPE vector(512);"
-
-   Immich builds the `clip_index` and `face_index` itself on first start. Face
-   names, albums and everything else human-entered came across in the dump; only
-   the indexes are rebuilt, not the embeddings underneath them.
-
-8. **Set `server.enabled: true`** in its own commit. Scaling the Deployment by
-   hand is not an alternative: Argo CD self-heals it back within seconds.
-
-9. **Upgrade to 3.0 as a separate commit**, once the library and albums have
-   been confirmed intact. `values.yaml` pins 2.7.4 deliberately: restoring onto
-   the version the dump came from keeps the platform migration and an Immich
-   major upgrade out of the same change window, and 3.0 is where pgvecto.rs
-   support was dropped — so it must meet a database that has already left it
-   behind, not one still being moved.
-
-Until step 3 the rollback is free. After it, the way back is the Docker stack
-plus `immich-rollback.sql.gz`. The library itself was never copied or moved, and
-the PV retains.
+Pinned at v2.7.4 in [values.yaml](values.yaml), the version the database was
+restored from when Immich moved here from Docker. The chart does not track
+Immich releases, so bumps are by hand. 3.0 is the next one, in a commit of its
+own: it is the release that dropped pgvecto.rs, which this database no longer
+uses (the embeddings were converted to VectorChord during the move).
 
 ## Single sign-on
 
@@ -255,7 +123,7 @@ Immich side is not: OAuth settings live in Immich's database, configured through
 The chart does offer `immich.configuration`, which would render the whole of
 `immich-config.json` and set `IMMICH_CONFIG_FILE`. Taking it would put the
 client secret in Git, turn the entire admin settings UI read-only — not just the
-OAuth part — and override the settings the restore brought across. It stays
+OAuth part — and override the settings already in the database. It stays
 empty, and OAuth stays a handful of fields typed into the web interface.
 
 So the client secret has exactly one home, `secret/authentik/oidc`, and nothing
@@ -263,8 +131,8 @@ machine-reads the Immich end of it. Read it back when you need it:
 
     kubectl -n vault exec -it vault-0 -- vault kv get -field=immich-client-secret secret/authentik/oidc
 
-`vault kv patch`, never `put` — that path holds five other applications'
-secrets, and `put` replaces a path wholesale.
+`vault kv patch`, never `put` — that path holds every other application's
+client secret, and `put` replaces a path wholesale.
 
 ### What to type into Immich
 
@@ -295,16 +163,14 @@ below.
 
 ### Auto Register will happily give you a second, empty Immich
 
-Immich matches an OAuth login to an existing account **by email address**. This
-instance has one account, carried over from the Docker install. If the address
-in Authentik differs from it at all, `Auto Register` — on by default — creates a
-brand new user with an empty library, and the first impression is that every
-photo is gone.
+Immich matches an OAuth login to an existing account **by email address**. If
+the address in Authentik differs from the Immich account's at all, `Auto
+Register` — on by default — creates a brand new user with an empty library, and
+the first impression is that every photo is gone.
 
-Nothing is gone in that case; you are simply logged in as somebody else. Still,
-line the addresses up before the first OAuth login, or link the accounts
-manually from `/user-settings` while signed in locally, or turn Auto Register
-off until the first login has proved itself.
+Nothing is gone in that case; you are simply logged in as somebody else. Line
+the addresses up before a user's first OAuth login, or link the accounts
+manually from `/user-settings` while signed in locally.
 
 ### Local login stays enabled
 

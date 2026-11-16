@@ -1,11 +1,7 @@
 # Jellyfin's configuration, user accounts, watch state and its metadata cache
 # - artwork, subtitles and the chapter images it extracts. The accounts and
 # watch history are the part that cannot be regenerated; the cache is merely
-# slow and bandwidth-hungry to rebuild, which is why the whole directory comes
-# across rather than just the database.
-#
-# Rsynced from ./config/jellyfin next to the old compose file; see
-# arr-stack/README.md.
+# slow and bandwidth-hungry to rebuild.
 apiVersion: v1
 kind: PersistentVolume
 metadata:

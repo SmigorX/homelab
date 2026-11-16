@@ -20,9 +20,9 @@ spec:
   podMetricsEndpoints:
     - port: metrics
 ---
-# Vault Secrets Operator. Scraped mostly for its reconcile errors: for five
-# days in November 2026 Vault sat sealed and every VaultStaticSecret failed to
-# sync without anything noticing.
+# Vault Secrets Operator. Scraped mostly for its reconcile errors, which feed
+# VaultSecretsOperatorFailing in rules.yaml: they are the only sign of a sealed
+# Vault.
 #
 # The metrics port sits behind kube-rbac-proxy, which wants a bearer token
 # allowed to GET /metrics; vmagent's own ServiceAccount token is. The proxy's

@@ -14,6 +14,19 @@ global:
           name: authentik-secrets
           key: POSTGRES_PASSWORD
 
+    # One variable per OIDC client, read by its blueprint with !Env.
+    #
+    # Add the key to Vault at secret/authentik/oidc (with `vault kv patch`)
+    # and let VSO sync it BEFORE the variable lands here: a secretKeyRef to a
+    # key that is not there yet leaves both authentik pods in
+    # CreateContainerConfigError, which takes SSO down for every application.
+    #
+    # A new variable and the blueprint that reads it land in the same sync,
+    # and the old worker - without the variable - can see the new blueprint
+    # file first. Its apply fails, Authentik only retries a blueprint when the
+    # file changes, and the app's login says "Client ID Error". Check the
+    # blueprint's status in the admin UI (Customization > Blueprints) and
+    # apply it by hand if it shows an error.
     - name: YAMTRACK_OIDC_CLIENT_SECRET
       valueFrom:
         secretKeyRef:
@@ -38,18 +51,6 @@ global:
           name: authentik-oidc-secrets
           key: nextcloud-client-secret
 
-    # Add the key to Vault at secret/authentik/oidc and let VSO sync it
-    # BEFORE this lands: a secretKeyRef to a key that is not there yet leaves
-    # both authentik pods in CreateContainerConfigError, which takes SSO down
-    # for every other application here, not just Miniflux.
-    #
-    # A new variable and the blueprint that reads it with !Env land in the same
-    # sync, and the old worker - without the variable - can see the new
-    # blueprint file first. Its apply fails, and Authentik only retries a
-    # blueprint when the file changes, so it stays failed and the app's login
-    # says "Client ID Error". This happened with Grafana. Check the blueprint's
-    # status in the admin UI (Customization > Blueprints) and apply it by hand
-    # if it shows an error.
     - name: MINIFLUX_OIDC_CLIENT_SECRET
       valueFrom:
         secretKeyRef:
@@ -81,11 +82,14 @@ blueprints:
   configMaps:
     - authentik-blueprints
 
-# Authentik declared no resources at all while being the cluster's largest real
-# consumer (~110m CPU, 1.2Gi across the three pods). That made it BestEffort on
-# memory - first in line for eviction, which would take SSO down for every
-# application here. Requests only, no CPU limits: one node, nothing to protect
-# other tenants from.
+# Explicit requests keep Authentik out of the BestEffort class, which is first
+# in line for eviction - and evicting it takes SSO down for every application.
+# No CPU limits: one node, nothing to protect other tenants from.
+#
+# server is a RollingUpdate Deployment, and its 768Mi/200m is the largest such
+# request in the cluster (Paperless ties on memory): free requests must stay
+# above it, or its next rollout sits Pending. See monitoring/README.md,
+# "The resource budget".
 server:
   replicas: 1
 
@@ -123,8 +127,7 @@ server:
 worker:
   replicas: 1
 
-  # The single busiest container in the cluster - blueprint reconciliation,
-  # outpost sync and the task queue all land here.
+  # Blueprint reconciliation, outpost sync and the task queue all land here.
   resources:
     requests:
       cpu: 150m
@@ -161,8 +164,9 @@ postgresql:
       storageClass: local-path-core
       size: 8Gi
 
-    # The subchart's resourcesPreset is already "none", so without this the
-    # database ran with nothing declared at all (it uses ~29m, 279Mi).
+    # The subchart's resourcesPreset is "none", so without this the database
+    # would declare nothing. It averages ~47m and peaks around 336Mi, a little
+    # over the memory request.
     resources:
       requests:
         cpu: 100m

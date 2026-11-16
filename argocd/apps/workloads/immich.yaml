@@ -6,10 +6,9 @@ metadata:
 spec:
   project: workloads
 
-  # Three sources, following argocd/apps/system/metallb.yaml: the chart, the
-  # repo as a values root for it, and the repo again for the manifests the
-  # chart does not provide (the library volume, PostgreSQL, the secret and the
-  # Ingress).
+  # The chart, the repo as a values root for it, and the repo again for what
+  # the chart does not provide: the library volume, PostgreSQL, the secret and
+  # the Ingress.
   sources:
     - repoURL: ghcr.io/immich-app/immich-charts
       chart: immich

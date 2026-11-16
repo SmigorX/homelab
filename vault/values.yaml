@@ -4,7 +4,7 @@
 global:
   enabled: true
 
-  # TLS for end-to-end encrypted transport
+  # Plain HTTP inside the cluster; TLS terminates at Traefik.
   tlsDisable: true
 
 injector:

@@ -24,12 +24,11 @@ spec:
       enableServiceLinks: false
 
       # gid 105 is the render group on this host, which owns
-      # /dev/dri/renderD128 at mode 0660. The compose file passed the same
-      # number through group_add. It is load-bearing even alongside privileged
-      # below: privileged settles the kernel's device cgroup, this settles file
-      # permissions, and the ffmpeg doing the transcoding runs as uid 1000
-      # rather than root. Re-check with `getent group render` if the host is
-      # ever rebuilt.
+      # /dev/dri/renderD128 at mode 0660. It is load-bearing even alongside
+      # privileged below: privileged settles the kernel's device cgroup, this
+      # settles file permissions, and the ffmpeg doing the transcoding runs as
+      # uid 1000 rather than root. Re-check with `getent group render` if the
+      # host is ever rebuilt.
       securityContext:
         supplementalGroups:
           - 105

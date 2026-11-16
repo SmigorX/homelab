@@ -1,49 +1,46 @@
 # Yamtrack
 
-Argo CD deploys Yamtrack through `argocd/apps/workloads/yamtrack.yaml`.
+Argo CD deploys Yamtrack and its Redis through
+`argocd/apps/workloads/yamtrack.yaml`, published at
+`yamtrack.k8s.internal.smigorx.eu`.
 
-## Required secret
+## Secrets
 
-Create the Secret before syncing the application:
+| Vault path | Secret | Keys |
+| --- | --- | --- |
+| `secret/yamtrack/app` | `yamtrack-secrets` | `secret` |
+| `secret/yamtrack/oidc` | `yamtrack-oidc-secrets` | `SOCIALACCOUNT_PROVIDERS` |
 
-    YAMTRACK_SECRET="$(head -c 64 /dev/urandom | base64 | tr -d '\n')"
-    kubectl -n yamtrack create secret generic yamtrack-secrets \
-      --from-literal=secret="$YAMTRACK_SECRET"
+`secret` is Django's secret key. Replacing it invalidates sessions and other
+signed state.
 
-Back up this Secret. Replacing it invalidates sessions and other cryptographic
-state.
+    vault kv put secret/yamtrack/app secret=…
 
 ## Authentik OIDC
 
-The Authentik blueprint expects `authentik-oidc-secrets` in the `authentik`
-namespace and `yamtrack-oidc-secrets` in the `yamtrack` namespace. Both use
-the same confidential-client secret; create them before syncing Authentik or
-Yamtrack.
+`SOCIALACCOUNT_PROVIDERS` is the whole django-allauth provider list as JSON,
+with the client secret inside it:
 
-First, generate the OIDC secret:
+    {"openid_connect": {"OAUTH_PKCE_ENABLED": true, "APPS": [{
+      "provider_id": "authentik",
+      "name": "Authentik",
+      "client_id": "yamtrack",
+      "secret": "<client secret>",
+      "settings": {"server_url": "https://auth.k8s.internal.smigorx.eu/application/o/yamtrack/.well-known/openid-configuration"}
+    }]}}
 
-    YAMTRACK_OIDC_SECRET="$(head -c 64 /dev/urandom | base64 | tr -d '\n')"
+The Authentik provider is a public client with PKCE, but it still carries
+`yamtrack-client-secret` from `secret/authentik/oidc`; keep the two equal.
+Write the Authentik half first, with `patch` — see
+[authentik/README.md](../authentik/README.md#adding-an-oidc-application).
 
-Create the Authentik namespace secret:
-
-    kubectl -n authentik create secret generic authentik-oidc-secrets \
-      --from-literal=yamtrack-client-secret="$YAMTRACK_OIDC_SECRET"
-
-Create the Yamtrack namespace secret:
-
-    kubectl -n yamtrack create secret generic yamtrack-oidc-secrets \
-      --from-literal=SOCIALACCOUNT_PROVIDERS="{\"openid_connect\":{\"OAUTH_PKCE_ENABLED\":true,\"APPS\":[{\"provider_id\":\"authentik\",\"name\":\"Authentik\",\"client_id\":\"yamtrack\",\"secret\":\"$YAMTRACK_OIDC_SECRET\",\"settings\":{\"server_url\":\"https://auth.k8s.internal.smigorx.eu/application/o/yamtrack/.well-known/openid-configuration\"}}]}}"
-
-After both applications sync, Yamtrack's login page will offer Authentik.
-Leave local authentication enabled initially so existing users can link their
+Local authentication stays enabled, so an existing user can link their
 Authentik identity under **Settings → Accounts**.
 
-## Importing existing data
+## Storage
 
-Export each user's tracked media from the existing Yamtrack UI as CSV. On the
-new instance, create the matching user, open Import, select **Import from
-Yamtrack**, and upload that CSV.
+`yamtrack-data` (5Gi) holds the SQLite database with everything tracked;
+`yamtrack-redis-data` (1Gi) only the task queue. Both are `local-path-core`.
 
-`yamtrack-data` and `yamtrack-redis-data` are persistent volumes. If either
-PVC already contains data from a previous migration attempt, remove that PVC
-before syncing when you want a completely fresh instance.
+The image is `ghcr.io/fuzzygrim/yamtrack:latest`, so a pod restart can pull a
+newer release.

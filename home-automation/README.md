@@ -6,13 +6,11 @@ USB Dongle Plus MG24 plugged into `fedora-server`.
 
 ## One namespace, three components
 
-Every other workload in this repo is one directory, one Application, one
-namespace. This one is three components under a single `home-automation`
-namespace and a single Application, with a subdirectory each. They share MQTT
-credentials, they are never upgraded independently, and Zigbee2MQTT is useless
-without the broker — splitting them would buy nothing but ordering problems.
-`directory.recurse: true` picks up the subdirectories, exactly as it does for
-joplin.
+Three components under a single `home-automation` namespace and a single
+Application, with a subdirectory each, the way arr-stack is laid out. They
+share MQTT credentials, they are never upgraded independently, and Zigbee2MQTT
+is useless without the broker — splitting them would buy nothing but ordering
+problems. `directory.recurse: true` picks up the subdirectories.
 
 There are deliberately **no `argocd.argoproj.io/sync-wave` annotations here**,
 and adding any is a trap. `local-path-core` uses
@@ -52,7 +50,8 @@ attempt and no flow-control workaround beyond `rtscts: false` was needed.
 
 ### Why Zigbee2MQTT is privileged
 
-It is the only privileged pod in this repo, and the only one that needs to be.
+Jellyfin and qBittorrent's WireGuard sidecar in arr-stack are privileged for
+the same underlying reason; this is the write-up they point to.
 
 Two things that look like they would block access do not. `/dev/ttyUSB0` is
 `root:dialout 0660`, and the image runs as root, so the file mode is satisfied
@@ -192,7 +191,7 @@ UI writes and update the init container.
 ## Database
 
 `home-assistant-postgres` is a CloudNativePG `Cluster` with **no**
-`bootstrap.initdb.secret`, unlike paperless and nextcloud. The operator
+`bootstrap.initdb.secret`, unlike every other `Cluster` in this repo. The operator
 therefore generates `home-assistant-postgres-app` itself and owns the password,
 so there is nothing to keep in sync with Vault. The trade-off is that the
 password lives only in the cluster: recoverable from the Secret, not from Vault.
@@ -234,7 +233,7 @@ wildcard record, so neither host needed a DNS change.
 MQTT is raw TCP and bypasses Traefik entirely. The broker is a `LoadBalancer` on
 **192.168.1.13** from the `ingress` MetalLB pool, requested explicitly through
 `metallb.universe.tf/loadBalancerIPs` because that pool sets
-`autoAssign: false`. `.11` is Traefik and `.12` is samba.
+`autoAssign: false`. `.11` is Traefik, `.12` samba and `.14` Forgejo's SSH.
 
 Exposing the broker on the LAN is what makes Wi-Fi devices (ESPHome, Tasmota,
 Shelly) possible later without touching this manifest, and is also why

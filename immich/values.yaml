@@ -1,6 +1,6 @@
 # Values for the official Immich chart, deployed by
 # argocd/apps/workloads/immich.yaml. See README.md for the parts of this that
-# are not obvious - especially why the server is switched off during a restore.
+# are not obvious.
 #
 # Only overrides belong here. The chart's own values.yaml is the reference:
 # https://github.com/immich-app/immich-charts/blob/main/charts/immich/values.yaml
@@ -18,14 +18,9 @@ controllers:
       main:
         image:
           # The chart does not track Immich releases, so this is pinned here
-          # rather than inherited from the chart's appVersion (v3.0.0).
-          #
-          # Deliberately the version the Docker install ran, not the newest:
-          # the restored database is a 2.7.4 schema, and 3.0 is the release
-          # that dropped pgvecto.rs support. Restoring onto the version the
-          # dump came from keeps the platform move and an Immich major upgrade
-          # out of the same change window. Bump to v3.0.0 in its own commit
-          # once the library and albums are confirmed intact - see README.md.
+          # rather than inherited from the chart's appVersion (v3.0.0). Still
+          # the version the database was restored from; 3.0 goes in a commit
+          # of its own - see README.md, "Version".
           tag: v2.7.4
 
         env:
@@ -50,13 +45,13 @@ controllers:
 immich:
   persistence:
     library:
-      # The photo library, mounted in place from the host directory Docker used
-      # - see manifests/pv.yaml. The chart refuses to render without this.
+      # The photo library - see manifests/pv.yaml. The chart refuses to render
+      # without this.
       existingClaim: immich-library
 
   # Deliberately empty. Setting it injects IMMICH_CONFIG_FILE, at which point
-  # Immich stops reading system settings from the database - the ones the
-  # restore brings across - and the admin settings UI turns read-only.
+  # Immich stops reading system settings from the database and the admin
+  # settings UI turns read-only.
   configuration: {}
 
 valkey:
@@ -64,7 +59,7 @@ valkey:
   # are disposable, so the chart's emptyDir is left alone.
   enabled: true
 
-  # The chart sets none, which left this container invisible to the scheduler.
+  # The chart sets no resources for it.
   controllers:
     main:
       containers:
@@ -83,13 +78,11 @@ server:
         main:
           # CPU: ~4m idle, bursts past 150m while generating thumbnails and
           # transcoding uploads. A request is a floor, not a cap, so the bursts
-          # are unaffected; 150m was lowered to 50m in November 2026, when CPU
-          # requests had become what the node ran out of first.
+          # are unaffected. Memory: ~690Mi steady, kept under the request so
+          # this is not an early eviction candidate.
           resources:
             requests:
               cpu: 50m
-              # Measured at ~690Mi steady, which was above the old 512Mi
-              # request and therefore an early eviction candidate.
               memory: 768Mi
             limits:
               memory: 4Gi
@@ -105,12 +98,10 @@ machine-learning:
     main:
       containers:
         main:
-          # Models are loaded on demand and unloaded when idle, so this sat at
-          # ~230Mi between jobs. The request was halved from 1Gi to leave the
-          # node room for rolling updates (see monitoring/README.md). A
-          # face-detection or smart-search run grows into the limit, which is
-          # what has to fit the models. CPU idles at ~3m; 100m -> 50m for the
-          # same reason as the server's.
+          # Models are loaded on demand and unloaded when idle, so this sits
+          # at ~230Mi and ~3m CPU between jobs. A face-detection or
+          # smart-search run grows into the limit, which is what has to fit
+          # the models.
           resources:
             requests:
               cpu: 50m
@@ -121,7 +112,6 @@ machine-learning:
   persistence:
     cache:
       # The chart defaults to emptyDir, which re-downloads ~2Gi of CLIP and
-      # face-recognition models on every restart - a regression from the named
-      # volume the Docker install had.
+      # face-recognition models on every restart.
       type: persistentVolumeClaim
       existingClaim: immich-ml-cache

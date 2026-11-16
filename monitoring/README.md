@@ -18,70 +18,63 @@ is the reference.
 | VMAuth (`vmks-internal`) | Routes VMAlert's queries to VMSingle or VLSingle | in-cluster only |
 
 The VictoriaMetrics operator turns the VM* custom resources into those
-Deployments, and also converts any Prometheus-operator `ServiceMonitor` it
-finds, so charts that only know how to ship a `ServiceMonitor` work unchanged.
+Deployments. It could also convert Prometheus-operator `ServiceMonitor`s, but
+their CRDs are not installed, so a chart's own `ServiceMonitor` switch does not
+work here: scrape it with a `VMServiceScrape` in
+[manifests/scrapes.yaml](manifests/scrapes.yaml) instead.
 
 ## Why VictoriaMetrics, not kube-prometheus-stack
 
-Memory. On a single node whose requests were already at 98% of allocatable,
-VMSingle does the job of Prometheus in a fraction of the RAM, and the chart
+Memory. On a single node short of requestable memory, VMSingle does the job of Prometheus in a fraction of the RAM, and the chart
 brings the same default rules and dashboards kube-prometheus-stack does.
 Grafana, Alertmanager, kube-state-metrics and node-exporter are the same
 components either way.
 
 ## The resource budget
 
-Scheduling is by requests, not usage, and before this stack the node had
-15.0Gi of its 15.3Gi allocatable requested while using about 7.6Gi. Room was
-made by trimming the requests (never the limits) of three workloads that idled
-far below them:
+Scheduling is by requests, not usage. This node's memory requests were at 98%
+of allocatable while it used about half, so making room for this stack meant
+trimming the requests (never the limits) of workloads idling far below them.
 
-| Workload | Requests before | after | Idle usage at the time |
+That exposed a second constraint: a Deployment with the default RollingUpdate
+strategy starts its new pod *before* stopping the old one, so for a moment it
+needs its request twice. With too little free, the first Authentik change after
+this stack landed left the new `authentik-server` Pending, Unschedulable,
+indefinitely. Hence the rule:
+
+**Free requestable memory and CPU must stay above the largest request of any
+RollingUpdate Deployment** — today `authentik-server`'s 768Mi and 200m
+(Paperless also requests 768Mi). Recreate Deployments and StatefulSets replace
+in place and do not count.
+
+The *Resources* dashboard computes this as *Memory rolling-update headroom* and
+*CPU rolling-update headroom*. When one goes red, its *by namespace* charts and
+container table show where requests are far above use. Both count init
+containers the way the scheduler does.
+
+No container here has a CPU limit, so a lower CPU request never caps a burst.
+What it changes is the share a container gets while the CPU is contended, which
+on this node means during a Jellyfin transcode.
+
+The requests trimmed so far, in case room appears to give any of them back:
+
+| Workload | Before | After | Use when trimmed |
 | --- | --- | --- | --- |
 | qBittorrent | 100m / 512Mi | 50m / 256Mi | ~30m / ~60Mi |
 | Forgejo | 100m / 512Mi | 50m / 256Mi | ~3m / ~100Mi |
 | Nextcloud | 100m / 512Mi | 50m / 256Mi | ~7m / ~70Mi |
-
-That freed 768Mi, enough for this stack's ~850Mi with what was left over, and
-the stack came in at exactly that. It was still not enough: the budget had
-forgotten rolling updates. A Deployment with the default RollingUpdate strategy
-starts its new pod *before* stopping the old one, so for a moment it needs its
-request twice. With 165Mi free, the first Authentik change after this stack
-landed left the new `authentik-server` (768Mi) Pending, Unschedulable,
-indefinitely. A second round of trims made that room:
-
-| Workload | Requests before | after | Idle usage at the time |
-| --- | --- | --- | --- |
-| immich-machine-learning | 100m / 1Gi | 100m / 512Mi | ~2m / ~230Mi |
+| immich-server | 150m / 768Mi | 50m / 768Mi | ~4m, bursts past 150m on uploads |
+| immich-machine-learning | 100m / 1Gi | 50m / 512Mi | ~3m / ~230Mi |
 | FlareSolverr | 100m / 512Mi | 100m / 256Mi | ~0m / ~145Mi |
-| Jellyfin | 200m / 1Gi | 200m / 512Mi | ~0m / ~400Mi; limit stays 4Gi for transcodes |
-
-The rule since then: **free requestable memory must stay above the largest
-memory request of any RollingUpdate Deployment** (768Mi, Authentik and
-Paperless). Recreate Deployments and StatefulSets replace in place and do not
-count. The *Resources* dashboard computes exactly this as *Memory rolling-update
-headroom*. When it goes red, its *Memory by namespace* chart and container table
-show where requests are far above use.
-
-**The same holds for CPU**, which ran out next: after the memory trims, 140m
-of CPU requests was free against authentik-server's 200m, so its next rollout
-would have stuck the same way. CPU requests had been set by habit (100m) for
-containers idling at 1–20m. A third round, CPU only:
-
-| Workload | CPU request before | after | Average use at the time |
-| --- | --- | --- | --- |
-| immich-server | 150m | 50m | ~4m, bursts past 150m on uploads |
-| immich-machine-learning | 100m | 50m | ~3m |
+| Jellyfin | 200m / 1Gi | 200m / 512Mi | ~0m / ~400Mi idle; limit stays 4Gi for transcodes |
 | OnlyOffice | 150m | 50m | ~1m |
 | Radarr, Sonarr | 100m each | 50m each | ~2–4m |
 | Home Assistant | 100m | 50m | ~1m |
 
-No container here has a CPU limit, so a lower request never caps a burst. What
-it changes is the share a container gets while the CPU is contended, which on
-this node means during a Jellyfin transcode. *CPU rolling-update headroom* on the
-*Resources* dashboard tracks the CPU side of the rule. Both stats count init
-containers the way the scheduler does; without that they came out 50m short,
-because of Forgejo's.
+The CloudNativePG databases were looked at and left alone: they idle at ~10m
+and ~80Mi against 100m and 256Mi, but a restart per change and a database's
+sensitivity to CPU contention made the ~250m and ~450Mi not worth it until an
+app needs the room.
 
 ## k3s specifics
 
@@ -111,17 +104,16 @@ know about:
 - **Traefik**, whose k3s chart exposes metrics on container port 9100 without a
   Service, so it is a `VMPodScrape`.
 - **Vault Secrets Operator**, behind kube-rbac-proxy, scraped with vmagent's
-  ServiceAccount token. Its reconcile errors are what would have caught Vault
-  sitting sealed for five days in November 2026.
-
+  ServiceAccount token. Its error counter feeds `VaultSecretsOperatorFailing`
+  (see *Alerting*): nothing else notices a sealed Vault.
 - **Argo CD's application controller**, on the `metrics` port it always opens
   (the chart's metrics Services are off). It provides `argocd_app_info`, every
   Application's sync and health status. The controller's NetworkPolicy already
   admits that port from any namespace.
 
-The `metrics` switches already present in `authentik/values.yaml`,
-`forgejo/values.yaml` and `cert-manager/values.yaml` can now be turned on;
-each needs a scrape object to go with it.
+The `metrics` switches in `authentik/values.yaml`, `forgejo/values.yaml` and
+`cert-manager/values.yaml` are off. Turning one on needs a scrape object here
+to go with it.
 
 ## Secrets
 
@@ -196,36 +188,46 @@ a line in the kustomization.
 
 Provisioned dashboards cannot be saved from the UI. To change one, edit it in
 Grafana, then *Export → Export as JSON* and overwrite its file here. Keep the
-`uid`, because the Health dashboard is the home page by its file name and the
-dashboards link to each other by tag.
+`uid`, so links and bookmarks keep working, and the tags, which the dashboards
+use to link to each other. Health is the home page by its file name,
+`health.json`.
 
 All queries target the datasource UID `VictoriaMetrics` directly. That is the
 UID the chart provisions, so the dashboards need no datasource variable.
-
-**One-off cleanup** after the sync that turns the stock dashboards off. The
-ConfigMaps the sync job created stay behind, because the job loses its
-ConfigMap permissions together with the dashboards:
-
-    kubectl -n monitoring delete configmap -l app.kubernetes.io/managed-by=sync-job,grafana_dashboard=1
 
 ## Logs
 
 VLSingle keeps 30 days of logs, and at most 8GiB of them, on a 10Gi
 `local-path-core` claim. VLAgent runs on the node and sends it two things:
 
-- **Every container's output**, read from `/var/log/pods`, with `namespace`,
-  `pod` and `container` attached. A pod's logs outlive the pod.
+- **Every container's output**, read from `/var/log/pods`, tagged with
+  `kubernetes.pod_namespace`, `kubernetes.pod_name` and
+  `kubernetes.container_name`. A pod's logs outlive the pod. Apps that log
+  JSON (Authentik, the operators) have their fields split out, `level` among
+  them.
 - **The host's syslog**: `/var/log/messages` (k3s itself, systemd, kernel,
   dnf) and `/var/log/secure` (sshd, sudo), tagged with `file`. These come from
   the systemd journal, which vlagent cannot read, through the rsyslog the
   Fedora host also runs. If rsyslog is ever removed from the host, these two
   stop and the journal is the only copy left.
 
-Search them in Grafana under *Explore*, datasource *VictoriaLogs*, in
-[LogsQL](https://docs.victoriametrics.com/victorialogs/logsql/):
+  Syslog lines carry no year or timezone, so they are stored at the time
+  vlagent read them, seconds after they were written. The exception is the
+  backlog vlagent read on its first start: everything in those files from
+  before 12 November 2026 08:46 UTC is stamped with that minute. Read
+  positions are kept on the host in `/var/lib/vlagent-data`, so a restarted
+  vlagent carries on rather than sending the files again.
 
-    {kubernetes.pod_namespace="authentik"} error
+Search them in Grafana under *Explore*, datasource *VictoriaLogs*, in
+[LogsQL](https://docs.victoriametrics.com/victorialogs/logsql/). Words match
+case-sensitively; `i(...)` ignores case:
+
+    {kubernetes.pod_namespace="authentik"} i(error)
+    {kubernetes.pod_namespace="authentik"} level:warning
     {file="/host/var/log/messages"} k3s
+
+Logs compress about 30 to 1 (the first 220MB became 7.5MB), so the 30 days
+run out long before the 8GiB.
 
 The chart also routes VMAlert through a small VMAuth (`vmks-internal`), so a
 VMRule can alert on log queries as well as metrics. VMAlert now depends on it:
@@ -259,13 +261,17 @@ The UIs, when needed:
 
 ## Storage
 
-`vmsingle-vmks` (10Gi, `local-path-core`) holds the metrics,
-`vlsingle-vmks` (10Gi, `local-path-core`) the logs, and
-`vmks-grafana` (1Gi, `local-path-core`) holds Grafana's SQLite database —
-users, preferences, anything built by hand in the UI. The dashboards in
-`manifests/dashboards/` are re-created from Git and need no backup. None of the claims may fall back
-to k3s's default `local-path` class, which is node-local and
-`reclaimPolicy: Delete`.
+All on `local-path-core`:
+
+| Claim | Size | Holds |
+| --- | --- | --- |
+| `vmsingle-vmks` | 10Gi | metrics |
+| `vlsingle-vmks` | 10Gi | logs |
+| `vmks-grafana` | 1Gi | Grafana's SQLite database: users, preferences, anything built by hand in the UI |
+
+The dashboards in `manifests/dashboards/` are re-created from Git and need no
+backup. None of the claims may fall back to k3s's default `local-path` class,
+which is node-local and `reclaimPolicy: Delete`.
 
 ## Argo CD notes
 

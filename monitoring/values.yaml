@@ -245,16 +245,21 @@ vlsingle:
 vlagent:
   enabled: true
   spec:
-    # Every container's stdout/stderr, from /var/log/pods, with namespace, pod
-    # and container attached.
+    # Every container's stdout/stderr, from /var/log/pods, tagged with
+    # kubernetes.pod_namespace, kubernetes.pod_name and
+    # kubernetes.container_name.
     k8sCollector:
       enabled: true
 
     # The host's own logs: k3s itself, systemd, sshd, dnf. They are in the
     # binary journal, which vlagent cannot read, but the host also runs
-    # rsyslog, which writes them out as text. Mounted under /host so the path
-    # cannot collide with whatever the operator mounts for k8sCollector.
-    # /var/log/messages is ~100MB a week, almost all of it k3s.
+    # rsyslog, which writes them out as text. /var/log/messages is ~100MB a
+    # week, almost all of it k3s.
+    #
+    # The operator happens to mount the host's /var/log at /var/log for
+    # k8sCollector, but that is its implementation detail; this mount, under
+    # /host, keeps working if that changes. The paths are also what the
+    # `file` field of every host log line says.
     extraArgs:
       fileCollector.glob: /host/var/log/messages,/host/var/log/secure
     volumes:
@@ -306,9 +311,7 @@ defaultDatasources:
 # The chart's ~40 stock dashboards (Windows, AIX and Darwin nodes, multicluster,
 # the components k3s does not split out) are off. The dashboards used here are
 # hand-written for this cluster and live in manifests/dashboards/; see
-# README.md. Turning this off does not delete the ConfigMaps the sync job
-# already created, because the job loses its ConfigMap permissions with it.
-# README.md has the one-off cleanup.
+# README.md.
 defaultDashboards:
   enabled: false
 

@@ -1,13 +1,14 @@
 # Nextcloud
 
-Argo CD deploys Nextcloud through `argocd/apps/workloads/nextcloud.yaml`:
-the app itself, a CloudNativePG `Cluster` for PostgreSQL, a Valkey cache, and
-a `CronJob` for background jobs.
+Argo CD deploys Nextcloud through `argocd/apps/workloads/nextcloud.yaml`,
+published at `https://nextcloud.k8s.internal.smigorx.eu`: the app itself, a
+CloudNativePG `Cluster` for PostgreSQL, a Valkey cache, and a `CronJob` for
+background jobs.
 
 ## Secrets
 
-All three come from Vault via the Vault Secrets Operator — there is no
-`kubectl create secret` step. See [vault/README.md](../vault/README.md).
+All of them come from Vault via the Vault Secrets Operator. See
+[vault/README.md](../vault/README.md).
 
 | Vault path            | Secret                   | Keys                          |
 | --------------------- | ------------------------ | ----------------------------- |
@@ -38,22 +39,29 @@ Authentik is registered through the `nextcloud.yaml` blueprint in
 the `login#code` route of the `user_oidc` app, so it changes only if the
 external hostname changes.
 
-Nextcloud has no environment variables for OIDC, so `oidc-hook.yaml` mounts a
-script into `/docker-entrypoint-hooks.d/before-starting`. The upstream image
-runs every *executable* `*.sh` there on each container start, as `www-data`
-with `cwd=/var/www/html` — hence `defaultMode: 0755` on the ConfigMap volume;
-without the executable bit the entrypoint silently skips the script. The hook
-installs and enables `user_oidc`, switches background jobs to cron mode, and
-converges the provider. `occ user_oidc:provider <identifier>` creates the
-provider if absent and updates it in place otherwise, so re-running is safe.
+Nextcloud has no environment variables for OIDC, so
+[manifests/hooks.yaml](manifests/hooks.yaml) mounts scripts into
+`/docker-entrypoint-hooks.d/before-starting`. The upstream image runs every
+*executable* `*.sh` there on each container start, in name order, as
+`www-data` with `cwd=/var/www/html` — hence `defaultMode: 0755` on the
+ConfigMap volume; without the executable bit the entrypoint silently skips a
+script. There are three:
+
+| Script | Does |
+| --- | --- |
+| `00-system.sh` | converges `trusted_domains`; sets `allow_local_remote_servers`, without which Nextcloud refuses to call Authentik or the Document Server on private addresses |
+| `10-authentik-oidc.sh` | installs and enables `user_oidc`, switches background jobs to cron mode, converges the provider |
+| `20-onlyoffice.sh` | installs the OnlyOffice connector and writes its settings (below) |
+
+`occ user_oidc:provider <identifier>` creates the provider if absent and
+updates it in place otherwise, so re-running is safe.
 
 The client secret reaches `occ` via `--clientsecret-env`, which takes the
 *name* of an environment variable rather than the value, keeping it out of the
 process list.
 
-Local login stays enabled. Keep it that way until you have confirmed a browser
-login through Authentik, otherwise a bad provider config locks you out of your
-own instance.
+Local login stays enabled, so a bad provider config or a down Authentik
+cannot lock the admin out.
 
 ## Reverse proxy
 
@@ -76,14 +84,10 @@ rolling update would deadlock waiting for a second pod to attach the same
 volume. The cron `CronJob` mounts it too and is safe only because this is a
 single-node cluster.
 
-## Access
-
-Served at `https://nextcloud.k8s.internal.smigorx.eu`.
-
 ## OnlyOffice
 
 Document editing is backed by the `onlyoffice-docs` deployment in this repo.
-`20-onlyoffice.sh` installs the `onlyoffice` connector app and writes four
+`20-onlyoffice.sh` installs the `onlyoffice` connector app and writes these
 values through `occ config:app:set`:
 
 | Key                         | Value                                                   | Who calls it |
@@ -107,7 +111,7 @@ error rather than anything more descriptive.
 Because the Document Server fetches files from Nextcloud over `StorageUrl`,
 `nextcloud.nextcloud.svc.cluster.local` must be a trusted domain — otherwise
 Nextcloud rejects those callbacks. That is why
-`NEXTCLOUD_TRUSTED_DOMAINS` lists it, and why `00-trusted-domains.sh` exists:
+`NEXTCLOUD_TRUSTED_DOMAINS` lists it, and why `00-system.sh` converges it:
 the entrypoint only applies that variable during the initial install, so
 editing it later would otherwise have no effect on an existing instance.
 

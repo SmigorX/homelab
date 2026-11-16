@@ -1,35 +1,77 @@
-# Authentik GitOps configuration
+# Authentik
 
-The `authentik-blueprints` ConfigMap is mounted by the Authentik Helm chart.
-Authentik discovers and reconciles each `.yaml` key as a blueprint.
+Argo CD deploys the Authentik chart through
+`argocd/apps/platform/authentik.yaml`, with its bundled PostgreSQL. Everything
+Authentik serves is declared as blueprints: the `authentik-blueprints`
+ConfigMap in [manifests/blueprints.yaml](manifests/blueprints.yaml) is mounted
+by the chart, and Authentik reconciles each `.yaml` key as one blueprint.
 
-## Enrolled applications
+## Applications
 
-- **Joplin** uses SAML. Its provider retains the `joplin` application slug,
-  audience, ACS URL, POST binding, and Authentik's built-in signing key. The
-  private key remains in Authentik's database and is deliberately not stored in
-  Git.
-- **Argo CD** uses native OIDC with a public PKCE client. The provider has no
-  client secret to manage. Members of Authentik's built-in `authentik Admins`
-  group are mapped to Argo CD's administrator role; other authenticated users
-  receive read-only access.
+| Blueprint key | Protocol | Who gets in |
+| --- | --- | --- |
+| `argocd.yaml` | OIDC, public PKCE client | everyone; `authentik Admins` → Argo CD admin, others read-only |
+| `joplin.yaml` | SAML | everyone |
+| `yamtrack.yaml` | OIDC, public client | everyone |
+| `paperless.yaml` | OIDC | everyone |
+| `vault.yaml` | OIDC | everyone; Vault policies decide the rest |
+| `nextcloud.yaml` | OIDC | everyone; Authentik's `admin` group → Nextcloud admin |
+| `miniflux.yaml` | OIDC | everyone |
+| `immich.yaml` | OIDC | everyone |
+| `forgejo.yaml` | OIDC | everyone |
+| `grafana.yaml` | OIDC | `authentik Admins` only |
+| `uptime-kuma.yaml` | forward auth, domain level | `guests` and `authentik Admins` |
+| `arr-stack.yaml` | forward auth, one `forward_single` provider per app | `authentik Admins` only |
+| `proxy-outpost.yaml` | — | the embedded outpost's provider list |
 
-- **Immich** uses OIDC, but only half of the configuration lives here: Immich
-  keeps its own OAuth settings in its database, typed into its admin interface.
-  Its provider carries three redirect URIs, one of which is the custom scheme
-  `app.immich:///oauth-callback` that the mobile apps return through. See
+"Everyone" means every Authentik account: an application with no policy
+binding admits any authenticated user, and the app's own roles take it from
+there.
+
+Some apps keep half of their setup outside this repo:
+
+- **Joplin** signs with Authentik's built-in self-signed key; the private key
+  stays in Authentik's database, not in Git.
+- **Argo CD** has no client secret. Its redirect URI is
+  `https://argocd.k8s.internal.smigorx.eu/pkce/verify`; changing the hostname
+  means changing it in both `argocd/values.yaml` and the blueprint.
+- **Immich** keeps its OAuth settings in its own database, typed into its
+  admin UI. Its provider carries three redirect URIs, one of them the custom
+  scheme `app.immich:///oauth-callback` the mobile apps return through. See
   [immich/README.md](../immich/README.md).
-
-- **Forgejo** uses OIDC, and unlike Immich the whole client is declarative: the
-  Helm chart reconciles the authentication source on every pod start from
-  `forgejo/values.yaml`. The source is named `authentik` there, which is what
-  makes the single redirect URI `/user/oauth2/authentik/callback`. See
+- **Forgejo** is fully declarative: the chart reconciles the authentication
+  source from `forgejo/values.yaml` on every pod start. The source's name,
+  `authentik`, is part of the redirect URI. See
   [forgejo/README.md](../forgejo/README.md).
+- **The forward-auth apps** have no SSO of their own. Traefik asks Authentik
+  about each request through a Middleware in the app's namespace. The arr
+  apps' providers also need `/outpost.goauthentik.io/` routed on their own
+  hosts, which [manifests/outpost-ingress.yaml](manifests/outpost-ingress.yaml)
+  does; see [arr-stack/README.md](../arr-stack/README.md).
 
-Keep Argo CD's local administrator enabled until you have confirmed a browser
-login through Authentik. The OIDC redirect URI is
-`https://argocd.k8s.internal.smigorx.eu/pkce/verify`; changing the external
-hostname requires changing it in both the Argo CD values and the blueprint.
+## Adding an OIDC application
+
+1. Generate a client secret and add it to Vault **first**, with `patch` (that
+   path holds every other client's secret too, and `put` would replace them):
+
+       vault kv patch secret/authentik/oidc <app>-client-secret=…
+
+   Plus the app's own copy, usually `secret/<app>/oidc`.
+2. Wait for VSO to copy it (`refreshAfter: 1h`), then check:
+
+       kubectl -n authentik get secret authentik-oidc-secrets \
+         -o jsonpath='{.data.<app>-client-secret}' | wc -c     # non-zero
+
+   A `secretKeyRef` to a key that is not there yet leaves both Authentik pods
+   in `CreateContainerConfigError`, and SSO goes down for everything.
+3. Add the `<APP>_OIDC_CLIENT_SECRET` variable to [values.yaml](values.yaml)
+   and the blueprint key to `blueprints.yaml`, reading it with `!Env`. Create
+   new providers with `grant_types` set explicitly (see the Nextcloud entry).
+4. Check the blueprint applied, as below. The old worker may see the new file
+   before it has the new variable, fail, and not retry until the file changes.
+
+A forward-auth app also needs its provider added to `proxy-outpost.yaml`; a
+missing entry does not error, the outpost just stops answering for that host.
 
 ## A new blueprint key does not apply itself
 
@@ -46,8 +88,7 @@ not reliably substitute for it, because a rollout triggered by the same commit
 races the volume update: the task fires while the pod still has the old
 projection, finds nothing new, and does not run again for an hour.
 
-That is exactly what happened when Immich was enrolled. The fix is to run
-discovery once the file is actually in the pod:
+The fix is to run discovery once the file is actually in the pod:
 
     kubectl -n authentik exec deploy/authentik-worker -- \
       ls /blueprints/mounted/cm-authentik-blueprints/
@@ -64,3 +105,6 @@ Then confirm the instance was created and applied:
 `successful` is the status to look for. A blueprint that parses but fails to
 apply shows `error` here, which is the other thing worth checking before
 blaming the application's own configuration.
+
+The admin UI shows the same under *Customization → Blueprints*, where a failed
+one can also be applied by hand.

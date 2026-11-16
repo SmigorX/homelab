@@ -1,8 +1,7 @@
 frrk8s:
   enabled: false
 
-# The chart ships none, which left both components invisible to the scheduler
-# on a node where CPU requests, not CPU usage, are what runs out.
+# The chart ships no resources.
 # No CPU limits anywhere in this cluster: one node, nothing to protect other
 # tenants from, and throttling the network layer is its own kind of outage.
 controller:

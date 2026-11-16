@@ -1,4 +1,5 @@
-# Unlike paperless and nextcloud, this Cluster has no `bootstrap.initdb.secret`.
+# Unlike every other Cluster in this repo, this one has no
+# `bootstrap.initdb.secret`.
 # CloudNativePG then generates home-assistant-postgres-app itself and owns the
 # password, so there is nothing to keep in sync with Vault. The trade-off is
 # that the password only exists in the cluster: it is recoverable from the

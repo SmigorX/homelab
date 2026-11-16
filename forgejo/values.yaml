@@ -60,9 +60,8 @@ ingress:
         - forgejo.k8s.internal.smigorx.eu
       secretName: forgejo-tls
 
-# Requests trimmed from 100m/512Mi to make room for monitoring/: it idled at
-# ~3m and ~100Mi. The limit is untouched, so a large push or a repository
-# migration still has the same 2Gi to grow into.
+# Idles at ~3m and ~100Mi. The 2Gi limit is room for a large push or a
+# repository migration.
 resources:
   requests:
     cpu: 50m
@@ -78,9 +77,9 @@ persistence:
   # is node-local and reclaimPolicy Delete. local-path-core is the NAS-backed
   # Retain class the rest of this repo uses.
   storageClass: local-path-core
-  # The chart's default is the gitea-era `gitea-shared-storage`. Worth settling
-  # before the first sync: the PVC carries helm.sh/resource-policy: keep, so
-  # renaming it later leaves the data behind in the old claim.
+  # Not the chart's gitea-era default, `gitea-shared-storage`. Never rename it:
+  # the PVC carries helm.sh/resource-policy: keep, so a new name means a new,
+  # empty claim and the data left behind in the old one.
   claimName: forgejo-data
   size: 20Gi
 
@@ -103,8 +102,9 @@ gitea:
     # matches on e-mail.
     email: contact@smigorx.eu
 
-  # Off, but kept rather than deleted: nothing scrapes Prometheus metrics in
-  # this cluster yet, and this is the switch for when something does.
+  # Off. Turning it on also needs a VMServiceScrape in
+  # monitoring/manifests/scrapes.yaml: the chart's own ServiceMonitor cannot be
+  # created here, as the Prometheus-operator CRDs are not installed.
   metrics:
     enabled: false
 

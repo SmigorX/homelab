@@ -1,6 +1,4 @@
-# The downloads and media tree, mounted in place: this is the very directory
-# the Docker compose stack used, not a copy of it. Nothing moves, so a rollback
-# to Docker needs only for these pods to stop.
+# The downloads and media tree.
 #
 # One volume for the whole tree rather than one per directory, because Sonarr
 # and Radarr import by hardlinking out of qBittorrent's download directory into
@@ -10,8 +8,8 @@
 # the subdirectory they need through the claim's subPath, which keeps them on
 # this one filesystem.
 #
-# Follows immich/manifests/pv.yaml; see that file for why a static volume is
-# the right shape for an adopted directory.
+# A static volume rather than a provisioned one because the directory already
+# holds the library: a provisioner would create a fresh, empty directory.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -42,7 +40,6 @@ spec:
     name: arr-stack-data
 
   hostPath:
-    # The path the compose stack bind-mounted as /data into Sonarr and Radarr.
     path: /mnt/nas/bulk/arr
     # Load-bearing. Without it, a pod starting while /mnt/nas is not mounted
     # makes the kubelet *create* this path, and the stack boots onto an empty

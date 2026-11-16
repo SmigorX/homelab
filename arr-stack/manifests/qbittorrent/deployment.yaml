@@ -1,15 +1,7 @@
-# The only pod in this namespace that touches the VPN, and the whole reason the
-# stack was rebuilt.
-#
-# Under Docker, Gluetun owned a network namespace and every other service
-# joined it with network_mode: service:gluetun. That coupled the entire stack to
-# one container: when Gluetun stopped it stopped publishing its namespace, and
-# Sonarr, Radarr, Prowlarr and the rest went down with it despite none of them
-# needing a VPN. Kubernetes does not need that trick - containers in a pod
-# already share a network namespace - so the tunnel is scoped to this pod alone
-# and every other component talks to qBittorrent over its ordinary Service.
-#
-# The two properties this file has to hold up:
+# The only pod in this namespace that touches the VPN; every other component
+# talks to qBittorrent over its ordinary Service. See arr-stack/README.md for
+# why the tunnel is scoped to this pod. The two properties this file has to
+# hold up:
 #
 #   1. qBittorrent never reaches the internet except through wg0. Not when the
 #      tunnel is down, not during startup, not if the Mullvad subscription
@@ -17,8 +9,7 @@
 #      the home IP".
 #
 #   2. qBittorrent's WebUI and API stay reachable regardless of the tunnel, so
-#      Sonarr and Radarr keep working and the UI still opens. This is what the
-#      Docker layout could not do.
+#      Sonarr and Radarr keep working and the UI still opens.
 #
 # Those two are reconciled by only ever filtering OUTPUT. Inbound connections
 # and their replies are never touched.
@@ -216,16 +207,16 @@ spec:
             - name: config
               mountPath: /config
 
-            # /data/torrents, not /data: the same path the compose file used,
-            # so every .fastresume entry still points at a file that exists.
-            # Changing it would make qBittorrent recheck or re-download the lot.
+            # /data/torrents, not /data: every .fastresume entry records this
+            # path, so changing it would make qBittorrent recheck or
+            # re-download the lot. Sonarr and Radarr see the same files at the
+            # same path through their /data mount.
             - name: data
               mountPath: /data/torrents
               subPath: torrents
 
-          # Requests trimmed from 100m/512Mi to make room for monitoring/: it
-          # ran at ~30m and ~60Mi while seeding. The limit is untouched, so a
-          # large torrent's piece cache still has the same 2Gi to grow into.
+          # Seeds at ~30m and ~60Mi. The 2Gi limit is room for a large
+          # torrent's piece cache.
           resources:
             requests:
               cpu: 50m

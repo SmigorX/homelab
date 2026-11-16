@@ -1,8 +1,8 @@
 # Arr stack
 
-Argo CD deploys six components through `argocd/apps/workloads/arr-stack.yaml`,
-replacing the `~/docker/arr/compose.yaml` stack: qBittorrent, Prowlarr, Sonarr,
-Radarr, FlareSolverr and Jellyfin, all in the `arr-stack` namespace.
+Argo CD deploys six components through `argocd/apps/workloads/arr-stack.yaml`:
+qBittorrent, Prowlarr, Sonarr, Radarr, FlareSolverr and Jellyfin, all in the
+`arr-stack` namespace.
 
 | Component | Host | Auth |
 | --- | --- | --- |
@@ -13,28 +13,19 @@ Radarr, FlareSolverr and Jellyfin, all in the `arr-stack` namespace.
 | Jellyfin | `jellyfin.k8s.internal.smigorx.eu` | its own accounts |
 | FlareSolverr | none | none, ClusterIP only |
 
-## Why this is not a translation of the compose file
+## Only qBittorrent is behind the VPN
 
-Under Docker, Gluetun owned a network namespace and every other service joined
-it with `network_mode: service:gluetun`. That had two consequences worth being
-rid of:
+The stack used to run under Docker Compose with every service inside Gluetun's
+network namespace, so a lapsed VPN subscription took out the whole stack, not
+just downloading. Containers in a pod already share a network namespace, so
+here the tunnel is a sidecar in qBittorrent's pod alone, and every other
+component reaches it at `http://qbittorrent.arr-stack.svc.cluster.local:8080`
+like any other backend. Nothing but qBittorrent's outbound traffic stops when
+the VPN does.
 
-- Reaching qBittorrent meant being *inside* the VPN's network, so the whole
-  stack had to live there whether or not it needed a VPN.
-- When Gluetun stopped it stopped publishing that namespace, and Sonarr,
-  Radarr, Prowlarr and FlareSolverr went down with it. A lapsed subscription
-  took out the entire stack, not just downloading.
-
-Kubernetes does not need the trick: containers in a pod already share a network
-namespace. So the tunnel is scoped to qBittorrent's pod alone, and every other
-component is an ordinary Deployment reaching it at
-`http://qbittorrent.arr-stack.svc.cluster.local:8080` like any other backend.
-Nothing but qBittorrent notices the VPN exists, and nothing but qBittorrent's
-outbound traffic stops when the VPN does.
-
-The stack also stopped routing Prowlarr and FlareSolverr through the tunnel.
-They fetch indexer pages, not torrents, and indexers are markedly more likely
-to challenge or ban a shared VPN exit address than a residential one.
+Prowlarr and FlareSolverr stay off the tunnel on purpose. They fetch indexer
+pages, not torrents, and indexers are markedly more likely to challenge or ban
+a shared VPN exit address than a residential one.
 
 ## The kill switch
 
@@ -89,9 +80,8 @@ Recover with `kubectl -n arr-stack rollout restart deploy/qbittorrent`.
 
 ## Storage
 
-One `PersistentVolume` over `/mnt/nas/bulk/arr` for the whole tree, mounted in
-place — the very directory the compose stack used, not a copy. Consumers take
-the subdirectory they need through `subPath`:
+One static `PersistentVolume` over `/mnt/nas/bulk/arr` for the whole tree.
+Consumers take the subdirectory they need through `subPath`:
 
 | Pod | subPath | Mount |
 | --- | --- | --- |
@@ -102,21 +92,17 @@ the subdirectory they need through `subPath`:
 Sonarr and Radarr get the whole tree on purpose. They import by hardlinking out
 of qBittorrent's download directory into the library, and a hardlink cannot
 cross filesystems — split into separate volumes, every import silently
-downgrades to a full copy. The paths match the compose file exactly so the
-existing databases' file references still resolve, and qBittorrent's
-`.fastresume` files still point at files that exist.
+downgrades to a full copy. The mount paths are recorded in the apps' databases
+and in qBittorrent's `.fastresume` files, so they must not change.
 
 `ReadWriteOnce` while four pods mount it is not a contradiction: RWO restricts a
 volume to one *node*, and everything schedules onto the single node holding
 `/mnt/nas`. It would become one on a second node.
 
 Each app's `/config` is its own static PV under `/mnt/nas/bulk/arr/config/`.
-These did **not** live on the NAS under Docker — they were `./config/<app>`
-beside the compose file, on the server's own disk — so they have to be rsynced
-across before the volumes are applied. Every PV uses `hostPath.type: Directory`,
-which means a missing path leaves the pod in `ContainerCreating` instead of
-being created empty; on an empty `/config` Sonarr and Radarr see no library and
-would re-grab everything already on disk.
+Every PV uses `hostPath.type: Directory`, so a missing path leaves the pod in
+`ContainerCreating` instead of being created empty; on an empty `/config`
+Sonarr and Radarr see no library and would re-grab everything already on disk.
 
 ## Authentik
 
@@ -141,7 +127,7 @@ of a namespace, so `authentik/manifests/outpost-ingress.yaml` sits beside
 path on each of the four hosts. Traefik ranks routers by rule specificity, so it
 wins over the application's `/` and everything else still reaches the app.
 
-The embedded outpost's provider list moved to its own blueprint key,
+The embedded outpost's provider list lives in its own blueprint key,
 `proxy-outpost.yaml`. The assignment *replaces* the list rather than adding to
 it, so exactly one blueprint may declare it — and `!KeyOf` cannot reach an id
 defined in another blueprint, hence `!Find` by name. **Every future forward auth
@@ -164,8 +150,8 @@ Anything but a redirect to Authentik means it is open.
 
 ## Privileged containers
 
-Two, where the repo previously had one. Both are the same wall Zigbee2MQTT hit,
-written up in `home-automation/manifests/zigbee2mqtt/deployment.yaml`:
+Two, both hitting the same wall as Zigbee2MQTT, written up in
+`home-automation/manifests/zigbee2mqtt/deployment.yaml`:
 
 - **Jellyfin**, for `/dev/dri`. runc gives every unprivileged container a cgroup
   device filter allowing only a default set, and a DRI render node is not in it,
@@ -181,81 +167,64 @@ written up in `home-automation/manifests/zigbee2mqtt/deployment.yaml`:
   `--kubelet-arg=allowed-unsafe-sysctls=net.ipv4.conf.all.src_valid_mark`, after
   which `NET_ADMIN` plus a pod-level `sysctls` entry would do.
 
-## Migrating from the compose stack
+## How the apps reach each other
 
-Before Argo CD syncs anything. Every step is on the server.
+Set in each app's UI and stored in its `/config`, not in Git:
 
-1. **Stop the old stack**, so nothing is writing the config directories while
-   they are copied and no second qBittorrent holds the torrents open:
+- Sonarr and Radarr → Settings → Download Clients → qBittorrent: host
+  `qbittorrent`, port `8080`.
+- Prowlarr → Settings → Apps: Sonarr at `http://sonarr:8989`, Radarr at
+  `http://radarr:7878`.
+- Prowlarr → Settings → Indexers → FlareSolverr: `http://flaresolverr:8191`.
 
-       cd ~/docker/arr && docker compose down
+If qBittorrent's WebUI answers `401 Unauthorized` through Traefik while working
+through `kubectl port-forward`, it is host header validation: Options → Web UI
+→ *Server domains* must list `qbittorrent.k8s.internal.smigorx.eu`, or `*`.
 
-2. **Copy the config directories onto the NAS.** They are small; the media tree
-   is already in place and must not be touched.
+## Replacing the WireGuard config
 
-       mkdir -p /mnt/nas/bulk/arr/config
-       for app in qbittorrent prowlarr sonarr radarr jellyfin; do
-         rsync -a ~/docker/arr/config/$app/ /mnt/nas/bulk/arr/config/$app/
-       done
-       chown -R 1000:1000 /mnt/nas/bulk/arr/config
+The tunnel's whole configuration is one Vault key. To move to another Mullvad
+server or a new key, generate a WireGuard config in the Mullvad account portal
+and reshape it as:
 
-   Keep the originals until the stack is verified — they are the rollback.
+    [Interface]
+    PrivateKey = <from the portal>
+    Address = <from the portal>
+    MTU = 1320
+    FwMark = 51820
 
-3. **Check the node** for the two values the manifests assume:
+    [Peer]
+    PublicKey = <server key>
+    Endpoint = <server address>:51820
+    AllowedIPs = 0.0.0.0/0
+    PersistentKeepalive = 25
 
-       getent group render      # expect gid 105, as in the compose group_add
-       ls -l /dev/dri/          # expect renderD128
-       modinfo wireguard        # the sidecar uses the kernel module
+Then:
 
-4. **Generate a WireGuard config** in the Mullvad account portal, picking a
-   Düsseldorf server to match the old `SERVER_CITIES=Dusseldorf`. Gluetun chose
-   a server per city on its own; plain wg-quick has no equivalent, so the server
-   is now a fixed choice in the config.
+    vault kv put secret/arr-stack/qbittorrent-wireguard wg0.conf=@wg0.conf
 
-5. **Compose `wg0.conf`** from it and push it into Vault as one key:
+and, once VSO has synced it (`refreshAfter: 1h`, or sooner after a restart of
+the operator), `kubectl -n arr-stack rollout restart deploy/qbittorrent`.
 
-       [Interface]
-       PrivateKey = <from the portal>
-       Address = <from the portal>
-       MTU = 1320
-       FwMark = 51820
+Three things differ from what the portal hands over, and all matter:
 
-       [Peer]
-       PublicKey = <Düsseldorf server key>
-       Endpoint = <Düsseldorf server address>:51820
-       AllowedIPs = 0.0.0.0/0
-       PersistentKeepalive = 25
+- **No `DNS =`.** wg-quick would try to rewrite `/etc/resolv.conf`, which
+  kubelet owns; the pod's `dnsConfig` does that job instead. If the portal's
+  resolver is not `10.64.0.1`, change it in
+  `manifests/qbittorrent/deployment.yaml` to match.
+- **`FwMark = 51820`** is what the kill switch matches on. Changing it here
+  means changing the iptables rule too.
+- **`Endpoint` must be an address, not a hostname.** DNS fails closed before
+  the tunnel is up, so a hostname there cannot be resolved and the tunnel could
+  never start.
 
-       vault kv put secret/arr-stack/qbittorrent-wireguard wg0.conf=@wg0.conf
+## If the host is rebuilt
 
-   Two lines differ from what the portal hands over, and both matter:
+The manifests assume three things about the node:
 
-   - **No `DNS =`.** wg-quick would try to rewrite `/etc/resolv.conf`, which
-     kubelet owns; the pod's `dnsConfig` does that job instead. If the portal's
-     resolver is not `10.64.0.1`, change it in
-     `manifests/qbittorrent/deployment.yaml` to match.
-   - **`FwMark = 51820`** is what the kill switch matches on. Changing it here
-     means changing the iptables rule too.
-
-   `Endpoint` must be an **address, not a hostname**. DNS fails closed before
-   the tunnel is up, so a hostname there cannot be resolved and the tunnel could
-   never start.
-
-6. **Let Argo CD sync**, then point the apps at each other. The hostnames
-   changed from `<app>.internal.smigorx.eu` to `<app>.k8s.internal.smigorx.eu`,
-   and qBittorrent moved from `gluetun:8080` to `qbittorrent:8080`:
-
-   - Sonarr and Radarr → Settings → Download Clients → qBittorrent: host
-     `qbittorrent`, port `8080`.
-   - Prowlarr → Settings → Apps: Sonarr at `http://sonarr:8989`, Radarr at
-     `http://radarr:7878`.
-   - Prowlarr → Settings → Indexers → FlareSolverr: `http://flaresolverr:8191`.
-
-   The migrated qBittorrent config carries the old hostname with it. If the
-   WebUI answers `401 Unauthorized` through Traefik while working through
-   `kubectl port-forward`, it is host header validation: Options → Web UI →
-   *Server domains* still lists `torrent.internal.smigorx.eu`. Set it to the new
-   host, or to `*`.
+    getent group render      # gid 105, as in jellyfin/deployment.yaml
+    ls -l /dev/dri/          # renderD128
+    modinfo wireguard        # the sidecar uses the kernel module
 
 ## Verifying
 
@@ -301,15 +270,14 @@ sitting in the downloads directory:
 **Jellyfin transcodes in hardware.** The device access above only makes the GPU
 reachable; Jellyfin uses it only once *Dashboard → Playback → Transcoding* says
 so. That setting lives in `/config/encoding.xml` on the config volume, not in
-Git, and until November 2026 it was `none`: every transcode ran on the CPU.
-Set:
+Git; with it at `none`, every transcode runs on the CPU. Set:
 
 - **Hardware acceleration:** VAAPI, device `/dev/dri/renderD128`.
 - **Hardware decoding:** H264, HEVC, MPEG2, VC1, VP8. Not HEVC 10bit, VP9 or
-  AV1: this Skylake iGPU cannot decode them (`vainfo` lists no `HEVCMain10`), so
-  ticking them asks it for something it cannot do. Those files are decoded on the CPU, which
-  is why two 4K HDR (10-bit HEVC) transcodes at once are still heavy here.
-  Clients that direct-play them cost nothing.
+  AV1: this Skylake iGPU cannot decode them (`vainfo` lists no `HEVCMain10`),
+  so ticking them asks it for something it cannot do. Those files are decoded
+  on the CPU, which is why two 4K HDR (10-bit HEVC) transcodes at once are
+  still heavy here. Clients that direct-play them cost nothing.
 - **Hardware encoding:** on.
 - **Tone mapping:** on, or 4K HDR transcodes come out washed out. It runs on
   OpenCL, which the image does not include; the `DOCKER_MODS` variable in the

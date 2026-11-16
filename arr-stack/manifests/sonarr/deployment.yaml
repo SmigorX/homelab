@@ -49,12 +49,12 @@ spec:
             # qBittorrent's completed downloads and the library through one
             # mount to import by hardlink; given two mounts it falls back to
             # copying, which doubles the space and takes minutes per episode.
-            # Same path the compose file used, so the existing database's file
-            # references still resolve.
+            # The database stores paths under /data, so the mount point must
+            # not move.
             - name: data
               mountPath: /data
 
-          # ~4m CPU idle; 100m until November 2026.
+          # Idles at ~4m CPU.
           resources:
             requests:
               cpu: 50m

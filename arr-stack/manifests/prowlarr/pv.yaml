@@ -1,10 +1,6 @@
 # Prowlarr's database: every configured indexer, its credentials, and the sync
 # relationships that push them into Sonarr and Radarr. Rebuilding this by hand
-# is the single most tedious part of the stack, which is why it is adopted
-# rather than started empty.
-#
-# Rsynced from ./config/prowlarr next to the old compose file; see
-# arr-stack/README.md.
+# is the single most tedious part of the stack.
 apiVersion: v1
 kind: PersistentVolume
 metadata:

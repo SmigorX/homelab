@@ -26,9 +26,8 @@ spec:
         - name: nextcloud
           image: nextcloud:34.0.3-apache
 
-          # Requests trimmed from 100m/512Mi to make room for monitoring/: it
-          # idled at ~7m and ~70Mi. The limit is untouched, so a burst (a big
-          # upload, a preview run) still has the same 2Gi to grow into.
+          # Idles at ~7m and ~70Mi. The 2Gi limit is room for a burst: a big
+          # upload, a preview run.
           resources:
             requests:
               cpu: 50m
@@ -86,7 +85,7 @@ spec:
             # Space separated. The in-cluster name is here because the
             # Document Server calls back to Nextcloud over StorageUrl, and
             # Nextcloud rejects any Host not on this list. Only applied at
-            # install time, so 00-trusted-domains.sh converges it too.
+            # install time, so 00-system.sh in hooks.yaml converges it too.
             - name: NEXTCLOUD_TRUSTED_DOMAINS
               value: nextcloud.k8s.internal.smigorx.eu nextcloud.nextcloud.svc.cluster.local
 

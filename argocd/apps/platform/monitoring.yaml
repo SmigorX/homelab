@@ -6,9 +6,9 @@ metadata:
 spec:
   project: platform
 
-  # Three sources, the same shape as argocd/apps/workloads/forgejo.yaml: the
-  # chart, the repo as a values root for it, and the repo again for what the
-  # chart does not provide (Vault-synced secrets, extra scrapes and rules).
+  # The chart, the repo as a values root for it, and the repo again for what
+  # the chart does not provide: Vault-synced secrets, extra scrapes, rules and
+  # dashboards.
   sources:
     - repoURL: https://victoriametrics.github.io/helm-charts
       chart: victoria-metrics-k8s-stack

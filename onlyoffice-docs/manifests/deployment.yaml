@@ -26,8 +26,8 @@ spec:
           image: onlyoffice/documentserver:9.4.0.1
           imagePullPolicy: IfNotPresent
 
-          # ~1m CPU between edits. The request was 150m until November 2026;
-          # an open document still takes what it needs above it.
+          # ~1m CPU between edits; an open document takes what it needs above
+          # the request.
           resources:
             requests:
               cpu: 50m

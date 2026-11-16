@@ -4,9 +4,8 @@ dex:
 notifications:
   enabled: false
 
-# None of these components declared resources, which hid roughly 40m and 470Mi
-# of steady usage from the scheduler. Requests only: one node, so a CPU limit
-# would just throttle a burst that has nothing to compete with.
+# The chart declares no resources for these. Requests only: one node, so a CPU
+# limit would just throttle a burst that has nothing to compete with.
 redis:
   enabled: true
 

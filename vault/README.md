@@ -4,8 +4,8 @@ Argo CD deploys Vault through `argocd/apps/platform/vault.yaml`, and the
 [Vault Secrets Operator](../vault-secrets-operator/README.md) (VSO) through
 `argocd/apps/platform/vault-secrets-operator.yaml`. Together they let a
 `VaultStaticSecret` CR sync a secret stored in Vault into a native
-Kubernetes `Secret` — replacing the manual `kubectl create secret` step
-every other app in this repo currently documents in its own README.
+Kubernetes `Secret`. Every app's secrets come through this, from its
+`manifests/vault-secret.yaml`.
 
 Vault itself runs in "standalone" mode: one replica, Shamir-sealed, file
 storage backend on the `data-vault-0` PVC (`local-path-core`). No
@@ -35,8 +35,9 @@ kubectl -n vault exec -it vault-0 -- vault operator unseal
 **Every Vault pod restart re-seals it.** Until auto-unseal (e.g. via a
 cloud KMS or Vault Transit) is set up, a node reboot or pod eviction means
 Vault serves nothing — including to the Vault Secrets Operator — until
-someone runs `vault operator unseal` three more times. Worth knowing before
-anything else in the cluster comes to depend on it.
+someone runs `vault operator unseal` three more times. Existing Secrets stay
+as they are, but nothing new or rotated syncs. The `VaultSecretsOperatorFailing`
+alert in monitoring/ posts to Discord when this has gone on for 20 minutes.
 
 Log in and enable the Kubernetes auth method:
 
@@ -103,8 +104,8 @@ the field leaves the old value in place:
       kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
       token_reviewer_jwt=""
 
-Enable a KV v2 engine and create an example policy + role matching the
-`default` `VaultAuth` that `vault-secrets-operator/values.yaml` declares:
+Enable a KV v2 engine and create the policy and role behind the `default`
+`VaultAuth` that `vault-secrets-operator/values.yaml` declares:
 
 ```
 kubectl -n vault exec -it vault-0 -- sh -c '
@@ -116,42 +117,25 @@ path "secret/data/*" {
 EOF
   vault write auth/kubernetes/role/default \
     bound_service_account_names=default \
-    bound_service_account_namespaces=default \
+    bound_service_account_namespaces="*" \
     policies=default-read \
     ttl=24h
 '
 ```
 
-**This `default` role is deliberately broad** (any pod using the `default`
-service account in the `default` namespace) — good enough to prove the
-pipeline works end-to-end, not something to leave in place once you start
-migrating real app secrets. For each app, prefer a dedicated Vault policy
-scoped to just its own `secret/data/<app>/*` path, plus a matching role
-bound to that app's own ServiceAccount and namespace — then point its
-`VaultStaticSecret` at a `vaultAuthRef` other than `default`.
+Every `VaultStaticSecret` in this repo omits `vaultAuthRef`, so VSO logs in
+through this one role as the `default` ServiceAccount **of the secret's own
+namespace**: the role has to cover every app namespace, and every app can
+read every path under `secret/`. `vault read auth/kubernetes/role/default`
+shows what the live role is bound to. The tighter alternative, not done here,
+is a policy per app scoped to `secret/data/<app>/*`, a role bound to that
+app's namespace, and a `vaultAuthRef` to a matching `VaultAuth`.
 
-## Trying it out
+## Adding a secret
 
-```
-kubectl -n vault exec -it vault-0 -- vault kv put secret/demo username=foo password=bar
-```
-
-```yaml
-apiVersion: secrets.hashicorp.com/v1beta1
-kind: VaultStaticSecret
-metadata:
-  name: demo
-  namespace: default
-spec:
-  path: secret/data/demo
-  destination:
-    name: demo-secret
-    create: true
-  refreshAfter: 1h
-```
-
-Apply that and `kubectl get secret demo-secret -o yaml` should show `username`/`password`
-populated from Vault, kept in sync every `refreshAfter`.
+Write it to Vault, then copy any app's `manifests/vault-secret.yaml` — they all
+use `type: kv-v2`, `mount: secret` and a `path` relative to it. VSO syncs it
+within `refreshAfter` (an hour everywhere here).
 
 ## UI / external access
 
@@ -188,15 +172,14 @@ so it no longer tells you the seal state. Ask Vault directly:
 
     kubectl -n vault exec vault-0 -- vault status
 
-Applying it needs a manual pod delete. `updateStrategyType: OnDelete` means a
-values change does not roll the StatefulSet, so the running pod keeps the old
-probe until you replace it:
+Any change to `values.yaml` needs a manual pod delete to take effect:
+`updateStrategyType: OnDelete` means the StatefulSet never rolls on its own,
+because a replaced pod comes up sealed.
 
     kubectl -n vault delete pod vault-0
 
-That restart reseals Vault, which makes it its own test: the new pod should
-come up `1/1` while still sealed, and the web UI should answer, at which point
-unsealing through the browser is the thing this change existed to allow.
+The new pod comes up `1/1` while sealed, and the web UI answers, so it can be
+unsealed from the browser.
 
 Worth knowing: `server.service.publishNotReadyAddresses` is `true` in this
 chart by default, and the EndpointSlice controller forces an endpoint's `ready`

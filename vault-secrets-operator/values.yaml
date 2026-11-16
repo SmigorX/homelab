@@ -1,12 +1,6 @@
 # Trimmed from the upstream chart defaults: https://github.com/hashicorp/vault-secrets-operator/blob/main/chart/values.yaml
 # Anything not listed here just falls back to that file's default.
 
-controller:
-  manager:
-    image:
-      repository: hashicorp/vault-secrets-operator
-      tag: "1.5.1"
-
 # Deploys a VaultConnection CR named "default" so individual VaultAuth/
 # VaultStaticSecret/etc. CRs don't each need to repeat the Vault address.
 defaultVaultConnection:
@@ -37,6 +31,10 @@ defaultAuthMethod:
 # omitted key keeps the chart's default. Null is what deletes it.
 controller:
   manager:
+    image:
+      repository: hashicorp/vault-secrets-operator
+      tag: "1.5.1"
+
     resources:
       requests:
         cpu: 10m

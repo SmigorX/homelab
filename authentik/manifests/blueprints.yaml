@@ -65,9 +65,7 @@ data:
           audience: joplin
           sp_binding: post
           signing_kp: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
-          # Authentik rejects a signing keypair with neither flag set, which
-          # is why this blueprint never applied. Both match the provider that
-          # was created by hand and is actually serving Joplin today.
+          # Authentik rejects a signing keypair with neither flag set.
           sign_assertion: true
           sign_response: true
       - model: authentik_core.application
@@ -266,12 +264,11 @@ data:
   # ConfigMap this is a proxy provider rather than an OAuth2 one: Traefik asks
   # Authentik about each request before it reaches the app.
   #
-  # forward_domain, not forward_single. Single-application mode requires
-  # /outpost.goauthentik.io/* to be reachable on the application's own host,
-  # which under k3s would need an ExternalName Service that Traefik refuses to
-  # route by default. Domain level keeps the round trip on the Authentik host
-  # and sets one cookie for the whole k8s.internal.smigorx.eu zone, so this
-  # provider is reusable by any other app that cannot authenticate itself.
+  # forward_domain: the login round trip stays on the Authentik host and sets
+  # one cookie for the whole k8s.internal.smigorx.eu zone, so Uptime Kuma
+  # needs no path in authentik/manifests/outpost-ingress.yaml. Only one
+  # provider can own that cookie domain, which is why the arr apps below use
+  # forward_single instead.
   #
   # No client secret here: Authentik generates one for proxy providers, so
   # unlike the OAuth2 entries above there is nothing to keep in step with
@@ -324,12 +321,11 @@ data:
           users:
             - !Find [authentik_core.user, [username, Gruzin]]
 
-      # Until these existed the application had no bindings at all, and an
-      # application without bindings is open to every authenticated user:
-      # forward auth proved only that someone had logged in to Authentik,
-      # never that they were entitled to this app in particular. Admins are
-      # bound explicitly because that default is now gone - a superuser gets
-      # no implicit pass.
+      # An application without bindings is open to every authenticated user:
+      # forward auth would prove only that someone had logged in to
+      # Authentik, never that they were entitled to this app in particular.
+      # Admins are bound explicitly because a superuser gets no implicit pass
+      # once any binding exists.
       - model: authentik_policies.policybinding
         identifiers:
           target: !KeyOf uptime-kuma-app
@@ -346,11 +342,6 @@ data:
         attrs:
           enabled: true
 
-      # The embedded outpost's provider list used to live here. It moved to
-      # proxy-outpost.yaml below once the arr stack added four more proxy
-      # providers: the list replaces rather than appends, so two blueprints
-      # each declaring their own would take turns evicting each other's
-      # providers, and !KeyOf cannot reach an id defined in another blueprint.
   miniflux.yaml: |
     version: 1
     metadata:
@@ -573,19 +564,15 @@ data:
   # SSO of their own, so they sit behind forward auth - but unlike Uptime Kuma
   # each gets its own provider in forward_single mode.
   #
-  # Domain level would have been the obvious copy. It does not work for more
-  # than one application: a forward_domain provider claims an entire cookie
+  # Not domain level: a forward_domain provider claims an entire cookie
   # domain, and a second one claiming the same k8s.internal.smigorx.eu leaves
   # the outpost with no way to tell which application's policies a request for
   # sonarr belongs to. Per-application authorization needs per-application
   # providers.
   #
-  # What made forward_single look impossible - /outpost.goauthentik.io/* has to
-  # answer on each application's own host, and an Ingress cannot name a Service
-  # in another namespace without ExternalName, which this Traefik refuses -
-  # turns out to be avoidable by serving those paths from an Ingress in *this*
-  # namespace, where authentik-server is a local Service. That Ingress is
-  # authentik/manifests/outpost-ingress.yaml.
+  # forward_single needs /outpost.goauthentik.io/* to answer on each
+  # application's own host; authentik/manifests/outpost-ingress.yaml does that.
+  # A new host here needs a rule there and an entry in proxy-outpost.yaml.
   arr-stack.yaml: |
     version: 1
     metadata:

@@ -41,8 +41,9 @@ spec:
         - name: zigbee2mqtt
           image: ghcr.io/koenkk/zigbee2mqtt:2.14.1
 
-          # The one privileged pod in this repo, and it is unavoidable rather
-          # than lazy. Bind-mounting the device node is not enough: runc gives
+          # Unavoidable rather than lazy, and the write-up the other privileged
+          # containers here (Jellyfin, the WireGuard sidecar) point to.
+          # Bind-mounting the device node is not enough: runc gives
           # every unprivileged container a cgroup device filter that allows
           # only a default set (null, zero, tty, random...), so opening the
           # dongle fails with EPERM no matter what the file mode or SELinux

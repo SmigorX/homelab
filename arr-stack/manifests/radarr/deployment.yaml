@@ -50,7 +50,7 @@ spec:
             - name: data
               mountPath: /data
 
-          # ~2m CPU idle; 100m until November 2026.
+          # Idles at ~2m CPU.
           resources:
             requests:
               cpu: 50m

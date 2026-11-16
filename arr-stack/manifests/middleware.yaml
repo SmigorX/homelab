@@ -1,11 +1,8 @@
 # Forward auth for the four apps in this namespace that cannot authenticate
 # themselves to anyone's satisfaction: qBittorrent, Prowlarr, Sonarr and Radarr.
-# Copied from uptime-kuma/manifests/middleware.yaml, which explains why the
-# provider behind it runs in forward_domain mode.
-#
-# One Middleware for four apps, unlike Uptime Kuma's one-per-namespace, because
-# a Middleware is namespaced and all four live here. Traefik still resolves it
-# per router as arr-stack-authentik@kubernetescrd.
+# Each has its own forward_single provider in Authentik, bound to authentik
+# Admins; one Middleware serves all four because the outpost picks the
+# provider by the request's Host. See arr-stack/README.md, "Authentik".
 #
 # Jellyfin deliberately does not use this: it has its own accounts and is meant
 # to be opened by people who have no Authentik login.

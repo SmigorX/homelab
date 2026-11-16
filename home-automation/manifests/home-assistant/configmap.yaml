@@ -23,8 +23,8 @@ data:
     # nobody promotes it, and ignores the YAML from then on. On a fresh
     # install nobody *can* promote it, because promotion needs a logged-in
     # UI session and onboarding has not happened yet. The reverse-proxy
-    # settings therefore live in the UI, under
-    # Settings -> System -> Network. See the README.
+    # settings are seeded into /config/.storage/http by the seed-config init
+    # container in deployment.yaml instead. See the README.
 
     recorder:
       # !env_var is not on the Home Assistant secrets documentation page, but it

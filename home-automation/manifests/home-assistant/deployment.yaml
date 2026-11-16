@@ -142,7 +142,7 @@ spec:
         - name: home-assistant
           image: ghcr.io/home-assistant/home-assistant:2026.9.0
 
-          # Nearly idle on CPU (~1m); 100m until November 2026.
+          # Nearly idle on CPU (~1m).
           resources:
             requests:
               cpu: 50m

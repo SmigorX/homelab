@@ -1,8 +1,6 @@
-# Under Docker this sat inside Gluetun's network namespace, so indexer requests
-# went out over the VPN and an unhealthy Gluetun took Prowlarr down with it.
-# Here it is an ordinary pod: indexer traffic leaves over the house connection,
-# which is what indexers that rate-limit or ban shared VPN exit addresses
-# prefer anyway, and nothing about it depends on the tunnel.
+# Not behind the VPN: indexer traffic leaves over the house connection, which
+# indexers that rate-limit or ban shared VPN exit addresses prefer, and nothing
+# here depends on the tunnel.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -42,8 +42,8 @@ all — see [vault/README.md](../vault/README.md).
 `ADMIN_PASSWORD` must be at most **72 bytes**. Miniflux hashes it with
 bcrypt, which refuses anything longer, and the pod then crash-loops on
 `bcrypt: password length exceeds 72 bytes` immediately after the migrations
-run. The `head -c 64 /dev/urandom | base64` idiom used elsewhere in this repo
-yields 88 characters and will not work here — `openssl rand -hex 32` gives 64.
+run. `head -c 64 /dev/urandom | base64` yields 88 characters and will not
+work here — `openssl rand -hex 32` gives 64.
 
 Keep the Postgres password alphanumeric. Miniflux takes a single connection
 string, so `DATABASE_URL` is assembled from those two keys through kubelet's
@@ -67,9 +67,9 @@ Authentik pods as a `secretKeyRef`, and a reference to a key that does not
 exist yet leaves them in `CreateContainerConfigError` — which takes SSO down
 for every other application here, not only Miniflux.
 
-`patch`, not `put`: `secret/authentik/oidc` already holds the client secrets
-for Paperless, Yamtrack, Vault and Nextcloud, and `vault kv put` replaces a
-path wholesale rather than merging into it.
+`patch`, not `put`: `secret/authentik/oidc` holds every other application's
+client secret too, and `vault kv put` replaces a path wholesale rather than
+merging into it.
 
     vault kv patch secret/authentik/oidc miniflux-client-secret=…
 

@@ -14,6 +14,12 @@
 #   Sets respondingTimeouts on the "websecure" entrypoint to 10 minutes,
 #   which is enough for multi-GB uploads over a home network.
 #
+# The k3s addon `traefk-config` (sic), from
+# /var/lib/rancher/k3s/server/manifests/traefk-config.yaml on the host, writes
+# this same object. The two do not agree - that file carries the MetalLB
+# annotation pinning Traefik to 192.168.1.11, this one does not - and whichever
+# applied last wins until the other reconciles again.
+#
 # Docs:
 #   https://docs.k3s.io/helm#customizing-packaged-components-with-helmchartconfig
 #   https://doc.traefik.io/traefik/routing/entrypoints/#respondingtimeouts

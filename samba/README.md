@@ -1,13 +1,12 @@
 # Samba
 
-Argo CD deploys an SMB file server through `argocd/apps/workloads/samba.yaml`,
-replacing the `dperson/samba` `compose.yaml` this directory used to hold.
+Argo CD deploys an SMB file server through `argocd/apps/workloads/samba.yaml`.
 
 ## Image
 
-`servercontainers/samba`, not `dperson/samba`. The latter was last published
-in **July 2021** — five years of unpatched Samba for something serving the
-whole LAN. This one tracks upstream (Samba 4.23.8) and is 25MB.
+`servercontainers/samba`, not the once-popular `dperson/samba`, which was last
+published in **July 2021** — years of unpatched Samba for something serving
+the whole LAN. This one tracks upstream (Samba 4.23.8) and is 25MB.
 
 The `smbd-only` variant drops avahi and wsdd2. Neither is useful here: their
 discovery broadcasts do not survive a MetalLB LoadBalancer, and dropping
@@ -27,21 +26,19 @@ directory is not something to allow during a rollout.
 
 ## Share and permissions
 
-The share reproduces the old compose `SHARE` line:
+One share, `Data`: browseable, writable, no guests, `valid users` and
+`admin users` both `smigorx`.
 
-    Data;/mnt/samba_share/Data;yes;no;no;smigorx;smigorx
-
-The last field is `admin users`, and it is load-bearing. `Data/Andrzej` and
+`admin users` is load-bearing. `Data/Andrzej` and
 `Data/Backups` are owned `0:101` with mode `drwxrwxr-x`, so uid 1000 matches
 only the "other" bits and cannot write them. `admin users = smigorx` runs
-file operations as root, which is how the old container reached those
-directories. Dropping it silently turns those two subtrees read-only.
+file operations as root, which is how it reaches those directories. Dropping
+it silently turns those two subtrees read-only.
 
 `UID_smigorx=1000` matches everything else under the share, so newly written
 files land under the same owner as the existing ones.
 
-Note this makes the account root-equivalent *within the share*. That was
-already true of the previous setup.
+Note this makes the account root-equivalent *within the share*.
 
 ## Network
 
@@ -50,9 +47,8 @@ SMB is raw TCP, so this does not go through Traefik. The Service is a
 That pool sets `autoAssign: false`, so the address is requested explicitly
 through the `metallb.universe.tf/loadBalancerIPs` annotation.
 
-The pool is declared as `192.168.1.11/24`, which spans the entire subnet
-rather than the single address it appears to name. `autoAssign: false` is the
-only thing preventing MetalLB from handing out arbitrary LAN addresses.
+The pool is `192.168.1.11`–`192.168.1.20`: `.11` Traefik, `.12` samba, `.13`
+Mosquitto, `.14` Forgejo's SSH. Keep that range out of the router's DHCP pool.
 
 `externalTrafficPolicy: Local` keeps the real client address visible in
 Samba's logs instead of a rewritten node IP.
@@ -66,8 +62,8 @@ Port 139 is published alongside 445 for older clients. Anything current uses
 | ---------------------- | --------------- | ---------- |
 | `secret/samba/smigorx` | `samba-secrets` | `password` |
 
-Reuse the password the previous container had, or existing clients will need
-reconfiguring. See [vault/README.md](../vault/README.md).
+Changing it means reconfiguring every client that has it saved. See
+[vault/README.md](../vault/README.md).
 
 ## Mounting
 

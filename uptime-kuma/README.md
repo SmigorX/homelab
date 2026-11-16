@@ -14,8 +14,7 @@ that SSO happened.
 
 [issue]: https://github.com/louislam/uptime-kuma/issues/5589
 
-This is the first `Middleware` in this repo, and the first proxy provider in
-`authentik/manifests/blueprints.yaml`. Four pieces have to agree:
+These pieces have to agree:
 
 | Piece | Where |
 | --- | --- |
@@ -32,12 +31,12 @@ application's policy engine mode is `any`, so they read as *or* — membership
 of either is enough.
 
 Those bindings are what makes access a decision. An Authentik application with
-no bindings at all is reachable by **every** authenticated user, which is what
-this was until they were added: forward auth proved that somebody had logged
-in, never that they were entitled to Uptime Kuma. So the first binding
-*narrowed* access rather than widening it, and a set of bindings that names no
-group of yours locks you out along with everyone else. Admins are listed
-explicitly for that reason — being a superuser grants no implicit pass.
+no bindings at all is reachable by **every** authenticated user: forward auth
+would prove that somebody had logged in, never that they were entitled to
+Uptime Kuma. A first binding *narrows* access rather than widening it, and a
+set of bindings that names no group of yours locks you out along with everyone
+else. Admins are listed explicitly for that reason — being a superuser grants
+no implicit pass.
 
 `guests` and its membership are declared in the blueprint, so a member added
 through the web interface is dropped on the next reconcile; new guests belong
@@ -46,26 +45,19 @@ would put a password in Git.
 
 ### Why domain level, not single application
 
-The provider runs in `forward_domain` mode. `forward_single` is the more
-obvious choice, but it requires `/outpost.goauthentik.io/*` to be routable on
-the application's *own* host, which across namespaces means an `ExternalName`
-Service — and k3s starts Traefik without
-`--providers.kubernetescrd.allowExternalNameServices`, so that route would
-silently never work. Domain level keeps the whole login round trip on
-`auth.k8s.internal.smigorx.eu`, which already exists, and sets one cookie for
-the entire `k8s.internal.smigorx.eu` zone.
+The provider runs in `forward_domain` mode: the whole login round trip stays
+on `auth.k8s.internal.smigorx.eu` and sets one cookie for the entire
+`k8s.internal.smigorx.eu` zone, so Uptime Kuma needs no
+`/outpost.goauthentik.io/*` route on its own host.
 
-The useful side effect is that none of this is Uptime Kuma specific — no new
-Authentik host and no new outpost Deployment for the next app either.
-
-It does not stretch to a *second* domain level provider, though. One claims the
-whole `k8s.internal.smigorx.eu` cookie domain, so a second claiming the same
-domain leaves the outpost unable to say which application's policies a given
-host belongs to. The arr stack needed per-application authorization and so went
-to `forward_single` instead, routing `/outpost.goauthentik.io/*` from an Ingress
-in the *authentik* namespace rather than reaching across namespaces with an
-`ExternalName`; see `arr-stack/README.md`. Reuse this provider only for
-something content with the same allow-list as Uptime Kuma.
+It does not stretch to a *second* domain level provider. One claims the whole
+`k8s.internal.smigorx.eu` cookie domain, so a second claiming the same domain
+leaves the outpost unable to say which application's policies a given host
+belongs to. Apps that need their own allow-list use `forward_single`, as the
+arr stack does, with their outpost path routed by
+`authentik/manifests/outpost-ingress.yaml`; see `arr-stack/README.md`. Reuse
+this provider only for something content with the same allow-list as Uptime
+Kuma.
 
 ### This fails open
 

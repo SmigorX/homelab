@@ -119,15 +119,12 @@ Three values are easy to get subtly wrong:
 Registration is handled with `ALLOW_ONLY_EXTERNAL_REGISTRATION`, not
 `DISABLE_REGISTRATION`. The latter also blocks account creation through OAuth2,
 which would defeat `oauth2_client.ENABLE_AUTO_REGISTRATION`. Local password
-sign-in stays enabled so the Vault-backed admin remains the escape hatch; keep
-it working until a browser login through Authentik is confirmed.
+sign-in stays enabled so the Vault-backed admin remains the escape hatch when
+Authentik is down.
 `ACCOUNT_LINKING: auto` matches an incoming Authentik identity to an existing
 local account by verified e-mail, so `gitea.admin.email` should be the address
 of the Authentik account that is meant to own the admin user.
 
-## A new blueprint key does not apply itself
-
-Adding `forgejo.yaml` to the ConfigMap is not enough and the failure is silent:
-the OIDC discovery URL answers `404` and Forgejo's login button fails. Run the
-discovery task by hand — see
+If the blueprint is new and the discovery URL answers `404`, Authentik has not
+picked it up yet; see
 [authentik/README.md](../authentik/README.md#a-new-blueprint-key-does-not-apply-itself).

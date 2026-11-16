@@ -1,6 +1,7 @@
 # MQTT is raw TCP, so this bypasses Traefik entirely and takes its own LAN
 # address from MetalLB. The "ingress" pool has autoAssign: false, so the
-# address must be requested explicitly. .11 is Traefik and .12 is samba.
+# address must be requested explicitly. .11 is Traefik, .12 samba and .14
+# Forgejo's SSH.
 apiVersion: v1
 kind: Service
 metadata:

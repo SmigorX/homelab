@@ -6,9 +6,8 @@ metadata:
 spec:
   project: workloads
 
-  # Three sources, following argocd/apps/workloads/immich.yaml: the chart, the
-  # repo as a values root for it, and the repo again for what the chart does
-  # not provide (PostgreSQL and the Vault-synced secrets).
+  # The chart, the repo as a values root for it, and the repo again for what
+  # the chart does not provide: PostgreSQL and the Vault-synced secrets.
   sources:
     - repoURL: code.forgejo.org/forgejo-helm
       chart: forgejo
