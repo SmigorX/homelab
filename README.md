@@ -57,7 +57,9 @@ consumer of either class needs the same selector. Forgetting it does not go
 unnoticed: the provisioner's `nodePathMap` lists only `fedora-server`, so a
 claim whose pod lands anywhere else stays `Pending` with a provisioning error.
 The static `hostPath` PVs (arr-stack, Immich's library) and samba's `hostPath`
-mount have no `nodeAffinity` at all and rely on the same selector alone.
+mount have no `nodeAffinity` at all and rely on the same selector alone. The one
+exception is Jellyfin, on `fedora-server-2` for its iGPU, with media over NFS
+from this node; see [arr-stack/README.md](arr-stack/README.md#jellyfin-runs-on-fedora-server-2).
 
 **HTTP** goes through Traefik at `<app>.k8s.internal.smigorx.eu` (a wildcard
 DNS record; Joplin alone is on `joplin.internal.smigorx.eu`), with a

@@ -23,17 +23,20 @@ spec:
     spec:
       enableServiceLinks: false
 
-      # Pinned while the arr stack's hostPath volumes live on one node; see
-      # README.md, "Storage".
+      # The one arr-stack pod not on fedora-server: fedora-server-2's UHD 630
+      # (i5-9500T, Coffee Lake) decodes 10-bit HEVC and VP9 in hardware, which
+      # the HD 530 in fedora-server cannot. Config is on this node's disk,
+      # media comes over NFS; see README.md, "Jellyfin runs on
+      # fedora-server-2".
       nodeSelector:
-        kubernetes.io/hostname: fedora-server
+        kubernetes.io/hostname: fedora-server-2
 
-      # gid 105 is the render group on this host, which owns
-      # /dev/dri/renderD128 at mode 0660. It is load-bearing even alongside
-      # privileged below: privileged settles the kernel's device cgroup, this
-      # settles file permissions, and the ffmpeg doing the transcoding runs as
-      # uid 1000 rather than root. Re-check with `getent group render` if the
-      # host is ever rebuilt.
+      # gid 105 is the render group on fedora-server-2 (and on fedora-server),
+      # which owns /dev/dri/renderD128 at mode 0660. It is load-bearing even
+      # alongside privileged below: privileged settles the kernel's device
+      # cgroup, this settles file permissions, and the ffmpeg doing the
+      # transcoding runs as uid 1000 rather than root. Re-check with
+      # `getent group render` if the host is ever rebuilt.
       securityContext:
         supplementalGroups:
           - 105
@@ -70,9 +73,10 @@ spec:
             # tone-maps HDR to SDR with OpenCL on a VAAPI pipeline; without a
             # runtime, every transcode with tone mapping on fails at once
             # ("Failed to get number of OpenCL platforms: -1001") and the
-            # client reports a playback error. This Skylake iGPU needs the
-            # frozen "legacy1" compute-runtime (24.35), which the mod installs
-            # next to the current one.
+            # client reports a playback error. Gen9 iGPUs (this Coffee Lake
+            # one, and the Skylake one in fedora-server) need the frozen
+            # "legacy1" compute-runtime (24.35), which the mod installs next to
+            # the current one.
             #
             # A mod is fetched from ghcr.io and dpkg-installed on every
             # container start, so start-up takes longer and needs internet.
@@ -88,20 +92,23 @@ spec:
             - name: config
               mountPath: /config
 
-            # media/ only. Jellyfin has no business seeing the torrents
-            # directory: half-finished downloads in a library scan produce
-            # broken entries that linger after the file is renamed on import.
-            - name: data
+            # media/ only, exported on its own by fedora-server. Jellyfin has
+            # no business seeing the torrents directory: half-finished
+            # downloads in a library scan produce broken entries that linger
+            # after the file is renamed on import. Read-only, because
+            # Jellyfin's metadata belongs in /config, not next to the media.
+            - name: media
               mountPath: /data/media
-              subPath: media
+              readOnly: true
 
             - name: dri
               mountPath: /dev/dri
 
           # The request covers idle Jellyfin (~400Mi); the limit covers
           # transcoding. Two simultaneous 4K HDR -> H.264 software transcodes
-          # (10-bit HEVC, which this iGPU cannot decode) peaked at 3.4Gi in
-          # November 2026, so keep the limit at 4Gi. Requests decide
+          # (10-bit HEVC, on fedora-server's iGPU, which cannot decode it)
+          # peaked at 3.4Gi in November 2026. Hardware decoding here should
+          # need far less; keep 4Gi until that has been measured. Requests decide
           # scheduling only and do not cap a burst; the price of the low
           # request is that a transcoding Jellyfin is far above it and among
           # the first pods evicted if the node ever runs out of memory.
@@ -115,11 +122,12 @@ spec:
       volumes:
         - name: config
           persistentVolumeClaim:
-            claimName: jellyfin-config
+            claimName: jellyfin-config-local
 
-        - name: data
+        - name: media
           persistentVolumeClaim:
-            claimName: arr-stack-data
+            claimName: jellyfin-media
+            readOnly: true
 
         - name: dri
           hostPath:

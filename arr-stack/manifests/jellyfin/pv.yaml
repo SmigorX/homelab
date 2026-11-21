@@ -2,10 +2,16 @@
 # - artwork, subtitles and the chapter images it extracts. The accounts and
 # watch history are the part that cannot be regenerated; the cache is merely
 # slow and bandwidth-hungry to rebuild.
+#
+# On fedora-server-2's own disk, unlike every other /config in this stack:
+# Jellyfin runs there for the newer iGPU (see deployment.yaml), and its SQLite
+# database must not go over NFS. The directory is not on the RAID; the copy it
+# was moved from, /mnt/nas/bulk/arr/config/jellyfin on fedora-server, was left
+# in place and is a snapshot as of the move, not a live backup.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: jellyfin-config
+  name: jellyfin-config-local
 spec:
   # Larger than the *arr volumes because the metadata cache grows with the
   # library, not with the number of settings.
@@ -23,8 +29,66 @@ spec:
 
   claimRef:
     namespace: arr-stack
-    name: jellyfin-config
+    name: jellyfin-config-local
 
+  # The directory exists on one node only. The Deployment's nodeSelector
+  # already says the same; this is what makes the volume say it too.
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - fedora-server-2
+
+  # SELinux is enforcing on the node and hostPath volumes are not relabelled,
+  # so the directory needs container_file_t; a semanage fcontext rule for
+  # /var/lib/jellyfin keeps it that way across a relabel. See README.md,
+  # "Jellyfin runs on fedora-server-2".
   hostPath:
-    path: /mnt/nas/bulk/arr/config/jellyfin
+    path: /var/lib/jellyfin
     type: Directory
+---
+# The media library, read-only over NFS from fedora-server. Only media/ is
+# exported, matching the subPath Jellyfin used to take from arr-stack-data, and
+# it is mounted at the same /data/media so the library paths recorded in
+# Jellyfin's database stay valid.
+#
+# The export carries mp=/mnt/nas/bulk, so fedora-server does not export it
+# while the bulk pool is unmounted - the NFS counterpart of
+# hostPath.type: Directory. The mount then fails and the pod waits in
+# ContainerCreating instead of scanning an empty library.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: jellyfin-media
+spec:
+  # Nominal, as for arr-stack-data: NFS enforces no quota.
+  capacity:
+    storage: 4Ti
+
+  accessModes:
+    - ReadOnlyMany
+
+  persistentVolumeReclaimPolicy: Retain
+
+  volumeMode: Filesystem
+
+  storageClassName: ""
+
+  claimRef:
+    namespace: arr-stack
+    name: jellyfin-media
+
+  # hard: an NFS outage stalls reads until the server is back rather than
+  # handing Jellyfin I/O errors it would record as missing files.
+  mountOptions:
+    - nfsvers=4.2
+    - hard
+    - noatime
+
+  nfs:
+    server: 192.168.1.10
+    path: /mnt/nas/bulk/arr/media
+    readOnly: true

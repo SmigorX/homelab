@@ -87,7 +87,9 @@ Consumers take the subdirectory they need through `subPath`:
 | --- | --- | --- |
 | qBittorrent | `torrents` | `/data/torrents` |
 | Sonarr, Radarr | *(none)* | `/data` |
-| Jellyfin | `media` | `/data/media` |
+
+Jellyfin is not on this volume: it runs on the other node and reads `media/`
+over NFS, mounted at the same `/data/media` (see below).
 
 Sonarr and Radarr get the whole tree on purpose. They import by hardlinking out
 of qBittorrent's download directory into the library, and a hardlink cannot
@@ -95,8 +97,8 @@ cross filesystems — split into separate volumes, every import silently
 downgrades to a full copy. The mount paths are recorded in the apps' databases
 and in qBittorrent's `.fastresume` files, so they must not change.
 
-`ReadWriteOnce` while four pods mount it is not a contradiction: RWO restricts a
-volume to one *node*, and every pod here carries
+`ReadWriteOnce` while three pods mount it is not a contradiction: RWO restricts
+a volume to one *node*, and every pod here except Jellyfin carries
 `nodeSelector: kubernetes.io/hostname: fedora-server`, the node holding
 `/mnt/nas` (see the root README, "Storage"). The PVs themselves have no
 `nodeAffinity`, so that selector is the only thing keeping a pod off a node
@@ -106,6 +108,39 @@ Each app's `/config` is its own static PV under `/mnt/nas/bulk/arr/config/`.
 Every PV uses `hostPath.type: Directory`, so a missing path leaves the pod in
 `ContainerCreating` instead of being created empty; on an empty `/config`
 Sonarr and Radarr see no library and would re-grab everything already on disk.
+
+### Jellyfin runs on fedora-server-2
+
+That node's UHD 630 (i5-9500T, Coffee Lake) decodes 10-bit HEVC and VP9 in
+hardware; the HD 530 (i5-6500, Skylake) in `fedora-server` cannot, which left
+every 4K HDR transcode on the CPU. Moving Jellyfin moved its two volumes:
+
+- **`/config` is on `fedora-server-2`'s own disk**, `/var/lib/jellyfin`, as the
+  static PV `jellyfin-config-local` with `nodeAffinity` to that node. It holds a
+  SQLite database, which must not go over NFS. It is **not on the RAID**: the
+  old copy at `/mnt/nas/bulk/arr/config/jellyfin` was left in place, but it is a
+  snapshot as of the move. SELinux is enforcing and hostPath volumes are not
+  relabelled, so the directory carries `container_file_t` through a rule:
+
+      sudo semanage fcontext -a -t container_file_t '/var/lib/jellyfin(/.*)?'
+      sudo restorecon -R /var/lib/jellyfin
+
+- **Media is NFS, read-only**, PV `jellyfin-media`. `fedora-server` exports
+  `media/` alone, to `fedora-server-2` alone, from
+  `/etc/exports.d/jellyfin.exports`:
+
+      /mnt/nas/bulk/arr/media 192.168.1.90(ro,root_squash,no_subtree_check,mp=/mnt/nas/bulk)
+
+  `mp=` withholds the export while the bulk pool is unmounted, so the pod waits
+  in `ContainerCreating` instead of scanning an empty library. Read-only means
+  Jellyfin cannot save artwork or `.nfo` files next to the media; leave *Save
+  artwork into media folders* and the NFO saver off in each library's settings.
+
+NFS also does not forward inotify events, so Jellyfin's real-time monitoring
+never sees an import Sonarr or Radarr writes on the other node. New episodes
+appear at the next scheduled library scan, or at once if Sonarr and Radarr are
+given a Jellyfin connection (*Settings → Connect → Emby / Jellyfin*), which
+asks Jellyfin to refresh after each import.
 
 ## Authentik
 
@@ -294,11 +329,17 @@ Three things differ from what the portal hands over, and all matter:
 
 ## If the host is rebuilt
 
-The manifests assume three things about the node:
+The manifests assume these things about the nodes. On `fedora-server-2`, for
+Jellyfin:
 
     getent group render      # gid 105, as in jellyfin/deployment.yaml
     ls -l /dev/dri/          # renderD128
+    ls -Zd /var/lib/jellyfin # container_file_t, see "Jellyfin runs on fedora-server-2"
+
+On `fedora-server`:
+
     modinfo wireguard        # the sidecar uses the kernel module
+    sudo exportfs -v         # /mnt/nas/bulk/arr/media to 192.168.1.90
 
 ## Verifying
 
@@ -347,11 +388,11 @@ so. That setting lives in `/config/encoding.xml` on the config volume, not in
 Git; with it at `none`, every transcode runs on the CPU. Set:
 
 - **Hardware acceleration:** VAAPI, device `/dev/dri/renderD128`.
-- **Hardware decoding:** H264, HEVC, MPEG2, VC1, VP8. Not HEVC 10bit, VP9 or
-  AV1: this Skylake iGPU cannot decode them (`vainfo` lists no `HEVCMain10`),
-  so ticking them asks it for something it cannot do. Those files are decoded
-  on the CPU, which is why two 4K HDR (10-bit HEVC) transcodes at once are
-  still heavy here. Clients that direct-play them cost nothing.
+- **Hardware decoding:** H264, HEVC, MPEG2, VC1, VP8, **HEVC 10bit and VP9**
+  (both new with the move to Coffee Lake; check that `vainfo` lists
+  `HEVCMain10` and `VP9Profile0`). Not AV1, which no Gen9 iGPU decodes, and not
+  *VP9 10bit* unless `vainfo` lists `VP9Profile2`; ticking one the hardware
+  cannot do asks it for something it cannot do. AV1 is decoded on the CPU.
 - **Hardware encoding:** on.
 - **Tone mapping:** on, or 4K HDR transcodes come out washed out. It runs on
   OpenCL, which the image does not include; the `DOCKER_MODS` variable in the
