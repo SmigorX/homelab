@@ -388,11 +388,13 @@ so. That setting lives in `/config/encoding.xml` on the config volume, not in
 Git; with it at `none`, every transcode runs on the CPU. Set:
 
 - **Hardware acceleration:** VAAPI, device `/dev/dri/renderD128`.
-- **Hardware decoding:** H264, HEVC, MPEG2, VC1, VP8, **HEVC 10bit and VP9**
-  (both new with the move to Coffee Lake; check that `vainfo` lists
-  `HEVCMain10` and `VP9Profile0`). Not AV1, which no Gen9 iGPU decodes, and not
-  *VP9 10bit* unless `vainfo` lists `VP9Profile2`; ticking one the hardware
-  cannot do asks it for something it cannot do. AV1 is decoded on the CPU.
+- **Hardware decoding:** H264, HEVC, MPEG2, VC1, VP8, VP9, **HEVC 10bit and
+  VP9 10bit**. The last three are new with the move to Coffee Lake: `vainfo`
+  lists `HEVCMain10`, `VP9Profile0` and `VP9Profile2`, none of which the old
+  Skylake iGPU had. Not AV1, which no Gen9 iGPU decodes, and not *HEVC RExt*;
+  ticking one the hardware cannot do asks it for something it cannot do. AV1
+  is decoded on the CPU. Check with
+  `kubectl -n arr-stack exec deploy/jellyfin -- /usr/lib/jellyfin-ffmpeg/vainfo --display drm --device /dev/dri/renderD128`.
 - **Hardware encoding:** on.
 - **Tone mapping:** on, or 4K HDR transcodes come out washed out. It runs on
   OpenCL, which the image does not include; the `DOCKER_MODS` variable in the
