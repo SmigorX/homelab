@@ -46,6 +46,19 @@ directory. Do not put Argo CD sync waves between a PVC and its consumer:
 `WaitForFirstConsumer` deadlocks the sync (see
 [home-automation/README.md](home-automation/README.md)).
 
+**Pinned to `fedora-server`, for now.** Every pod that mounts a
+`local-path-*` claim, and every chart value or CloudNativePG `Cluster` that
+creates one, sets `nodeSelector: kubernetes.io/hostname: fedora-server`
+(`spec.affinity.nodeSelector` on a `Cluster`). A provisioned PV already carries
+`nodeAffinity` to the node it was made on, so existing pods could not move
+anyway; the selector is for new claims, which `WaitForFirstConsumer` would
+otherwise provision on whichever node the first pod happens to land on. A new
+consumer of either class needs the same selector. Forgetting it does not go
+unnoticed: the provisioner's `nodePathMap` lists only `fedora-server`, so a
+claim whose pod lands anywhere else stays `Pending` with a provisioning error.
+The static `hostPath` PVs (arr-stack, Immich's library) and samba's `hostPath`
+mount have no `nodeAffinity` at all and rely on the same selector alone.
+
 **HTTP** goes through Traefik at `<app>.k8s.internal.smigorx.eu` (a wildcard
 DNS record; Joplin alone is on `joplin.internal.smigorx.eu`), with a
 `letsencrypt-cloudflare` certificate from cert-manager and `gethomepage.dev`

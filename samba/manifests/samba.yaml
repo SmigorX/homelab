@@ -21,6 +21,12 @@ spec:
 
     spec:
       enableServiceLinks: false
+
+      # Pinned while the share's hostPath lives on one node; see README.md,
+      # "Storage".
+      nodeSelector:
+        kubernetes.io/hostname: fedora-server
+
       containers:
         - name: samba
           # smbd only - no avahi/wsdd2. Discovery broadcasts do not survive a

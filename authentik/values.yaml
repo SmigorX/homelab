@@ -170,6 +170,10 @@ postgresql:
       storageClass: local-path-core
       size: 8Gi
 
+    # Pinned while local-path volumes live on one node; see README.md, "Storage".
+    nodeSelector:
+      kubernetes.io/hostname: fedora-server
+
     # The subchart's resourcesPreset is "none", so without this the database
     # would declare nothing. It averages ~47m and peaks around 336Mi, a little
     # over the memory request.

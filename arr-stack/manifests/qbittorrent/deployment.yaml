@@ -38,6 +38,11 @@ spec:
     spec:
       enableServiceLinks: false
 
+      # Pinned while the arr stack's hostPath volumes live on one node; see
+      # README.md, "Storage".
+      nodeSelector:
+        kubernetes.io/hostname: fedora-server
+
       # Cluster DNS is deliberately not used. Resolution has to happen inside
       # the tunnel - otherwise every tracker hostname qBittorrent looks up is a
       # plaintext query to CoreDNS and out of the house over the home IP, which

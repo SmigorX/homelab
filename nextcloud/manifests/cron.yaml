@@ -18,6 +18,10 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          # Pinned while local-path volumes live on one node; see README.md, "Storage".
+          nodeSelector:
+            kubernetes.io/hostname: fedora-server
+
           enableServiceLinks: false
 
           # Overriding command: bypasses the image entrypoint, which is what

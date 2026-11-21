@@ -14,6 +14,12 @@ controllers:
     # briefly run two Immich servers against one library and one database.
     strategy: Recreate
 
+    # Pinned while local-path volumes live on one node; see README.md, "Storage".
+    # The server's library PV is a hostPath on the same node, too.
+    pod:
+      nodeSelector:
+        kubernetes.io/hostname: fedora-server
+
     containers:
       main:
         image:

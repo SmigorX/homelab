@@ -26,6 +26,11 @@ spec:
     spec:
       enableServiceLinks: false
 
+      # Pinned while the arr stack's hostPath volumes live on one node; see
+      # README.md, "Storage".
+      nodeSelector:
+        kubernetes.io/hostname: fedora-server
+
       containers:
         - name: flaresolverr
           image: ghcr.io/flaresolverr/flaresolverr:v3.5.2

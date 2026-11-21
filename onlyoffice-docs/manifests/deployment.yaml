@@ -20,6 +20,10 @@ spec:
         app.kubernetes.io/name: onlyoffice-docs
 
     spec:
+      # Pinned while local-path volumes live on one node; see README.md, "Storage".
+      nodeSelector:
+        kubernetes.io/hostname: fedora-server
+
       terminationGracePeriodSeconds: 60
       containers:
         - name: documentserver

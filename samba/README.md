@@ -18,8 +18,9 @@ name rather than by browsing the network.
 `/mnt/nas/core/SMB` is mounted as a **hostPath**, deliberately not a PVC. The
 directory already holds ~133G of existing data; a PVC would provision an
 empty volume under `/mnt/nas/core/k3s` and serve nothing, with no error to
-say so. The `hostPath` also pins the pod to the node holding that disk, which
-is correct here and would need revisiting on a multi-node cluster.
+say so. A `hostPath` does nothing to keep the pod on the node holding that
+disk, so `nodeSelector: kubernetes.io/hostname: fedora-server` does that (see
+the root README, "Storage").
 
 `strategy: Recreate` for the same reason — two smbd instances writing one
 directory is not something to allow during a rollout.

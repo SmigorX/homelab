@@ -23,11 +23,13 @@ spec:
     spec:
       enableServiceLinks: false
 
-      # The only manifest in the repo that needs to choose a node: the Zigbee
-      # coordinator is a physical stick in one machine. Everything else here is
-      # already pinned by its local-path volume.
+      # The Zigbee coordinator is a physical stick in one machine, which is
+      # what home-automation=true marks. The hostname is the same pin every
+      # local-path consumer carries (see README.md, "Storage"); today both
+      # labels are on the same node.
       nodeSelector:
         home-automation: "true"
+        kubernetes.io/hostname: fedora-server
 
       # gid 18 is dialout on the host, which owns /dev/ttyUSB0 (mode 0660).
       # The image runs as root today, so this changes nothing yet; it is what

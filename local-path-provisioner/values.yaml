@@ -14,8 +14,12 @@ storageClassConfigs:
       reclaimPolicy: Retain
       volumeBindingMode: WaitForFirstConsumer
 
+    # Only fedora-server is listed, with no DEFAULT_PATH_FOR_NON_LISTED_NODES,
+    # so a claim whose first pod lands on any other node fails to provision
+    # instead of quietly getting a directory on that node's disk. See
+    # README.md, "Storage".
     nodePathMap:
-      - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
+      - node: fedora-server
         paths:
           - /mnt/nas/core/k3s
 
@@ -27,8 +31,9 @@ storageClassConfigs:
       reclaimPolicy: Retain
       volumeBindingMode: WaitForFirstConsumer
 
+    # Same as local-path-core.
     nodePathMap:
-      - node: DEFAULT_PATH_FOR_NON_LISTED_NODES
+      - node: fedora-server
         paths:
           - /mnt/nas/bulk/k3s
 # The chart declares none. The provisioner only wakes up when a PVC needs

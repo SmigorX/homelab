@@ -42,6 +42,10 @@ vmsingle:
         requests:
           storage: 10Gi
 
+    # Pinned while local-path volumes live on one node; see README.md, "Storage".
+    nodeSelector:
+      kubernetes.io/hostname: fedora-server
+
     resources:
       requests:
         cpu: 50m
@@ -263,6 +267,10 @@ vlsingle:
         requests:
           storage: 10Gi
 
+    # Pinned while local-path volumes live on one node; see README.md, "Storage".
+    nodeSelector:
+      kubernetes.io/hostname: fedora-server
+
     # The limit is for queries: a wide search over many days is what grows
     # it, not ingestion, which is a few hundred lines a minute here.
     resources:
@@ -409,6 +417,10 @@ grafana:
     accessModes:
       - ReadWriteOnce
     size: 1Gi
+
+  # Pinned while local-path volumes live on one node; see README.md, "Storage".
+  nodeSelector:
+    kubernetes.io/hostname: fedora-server
 
   ingress:
     enabled: true

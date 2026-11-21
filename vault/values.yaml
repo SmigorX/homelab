@@ -92,6 +92,10 @@ server:
     storageClass: local-path-core
     accessMode: ReadWriteOnce
 
+  # Pinned while local-path volumes live on one node; see README.md, "Storage".
+  nodeSelector:
+    kubernetes.io/hostname: fedora-server
+
   auditStorage:
     enabled: false
 

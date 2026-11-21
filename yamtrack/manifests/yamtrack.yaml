@@ -17,6 +17,9 @@ spec:
       labels:
         app.kubernetes.io/name: yamtrack
     spec:
+      # Pinned while local-path volumes live on one node; see README.md, "Storage".
+      nodeSelector:
+        kubernetes.io/hostname: fedora-server
       containers:
         - name: yamtrack
           image: ghcr.io/fuzzygrim/yamtrack:latest

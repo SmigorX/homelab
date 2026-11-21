@@ -83,6 +83,10 @@ persistence:
   claimName: forgejo-data
   size: 20Gi
 
+# Pinned while local-path volumes live on one node; see README.md, "Storage".
+nodeSelector:
+  kubernetes.io/hostname: fedora-server
+
 # Off, but kept here rather than deleted: signed internal Git activity is wanted
 # eventually, and this is where the key gets pointed at.
 signing:

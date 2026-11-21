@@ -23,6 +23,11 @@ spec:
     spec:
       enableServiceLinks: false
 
+      # Pinned while the arr stack's hostPath volumes live on one node; see
+      # README.md, "Storage".
+      nodeSelector:
+        kubernetes.io/hostname: fedora-server
+
       # gid 105 is the render group on this host, which owns
       # /dev/dri/renderD128 at mode 0660. It is load-bearing even alongside
       # privileged below: privileged settles the kernel's device cgroup, this

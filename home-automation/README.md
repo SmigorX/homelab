@@ -79,11 +79,11 @@ the thing to reach for if a second device ever needs the same treatment.
 
 ### Node pinning
 
-`nodeSelector: home-automation=true` on the Zigbee2MQTT Deployment is the only
-explicit scheduling constraint in this repo. It has no effect on a single-node
-cluster — everything else here is already pinned by its `local-path` volume —
-but the coordinator is a physical stick in one machine, and that is worth
-stating rather than inheriting by accident.
+Every pod here carries `kubernetes.io/hostname: fedora-server`, like every
+`local-path` consumer in the repo (see the root README, "Storage").
+Zigbee2MQTT also has `home-automation=true`, which marks the machine the
+coordinator stick is plugged into. Today both labels are on the same node; the
+second is the one that stays true if the storage pin is ever lifted.
 
 ## Storage
 

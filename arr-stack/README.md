@@ -96,8 +96,11 @@ downgrades to a full copy. The mount paths are recorded in the apps' databases
 and in qBittorrent's `.fastresume` files, so they must not change.
 
 `ReadWriteOnce` while four pods mount it is not a contradiction: RWO restricts a
-volume to one *node*, and everything schedules onto the single node holding
-`/mnt/nas`. It would become one on a second node.
+volume to one *node*, and every pod here carries
+`nodeSelector: kubernetes.io/hostname: fedora-server`, the node holding
+`/mnt/nas` (see the root README, "Storage"). The PVs themselves have no
+`nodeAffinity`, so that selector is the only thing keeping a pod off a node
+without the tree. Lift it and RWO becomes a real constraint.
 
 Each app's `/config` is its own static PV under `/mnt/nas/bulk/arr/config/`.
 Every PV uses `hostPath.type: Directory`, so a missing path leaves the pod in

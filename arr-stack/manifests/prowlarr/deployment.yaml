@@ -26,6 +26,11 @@ spec:
     spec:
       enableServiceLinks: false
 
+      # Pinned while the arr stack's hostPath volumes live on one node; see
+      # README.md, "Storage".
+      nodeSelector:
+        kubernetes.io/hostname: fedora-server
+
       containers:
         - name: prowlarr
           image: lscr.io/linuxserver/prowlarr:2.6.5.5623-ls161

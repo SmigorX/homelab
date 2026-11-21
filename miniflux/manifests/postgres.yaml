@@ -20,6 +20,11 @@ spec:
     storageClass: local-path-core
     size: 10Gi
 
+  # Pinned while local-path volumes live on one node; see README.md, "Storage".
+  affinity:
+    nodeSelector:
+      kubernetes.io/hostname: fedora-server
+
   resources:
     requests:
       cpu: 50m

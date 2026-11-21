@@ -20,6 +20,10 @@ spec:
         app: mosquitto
 
     spec:
+      # Pinned while local-path volumes live on one node; see README.md, "Storage".
+      nodeSelector:
+        kubernetes.io/hostname: fedora-server
+
       enableServiceLinks: false
 
       # 1883 is the uid/gid the eclipse-mosquitto image creates. Pinning it
