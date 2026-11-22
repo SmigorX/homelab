@@ -104,10 +104,10 @@ immich-machine-learning (4Gi and 6Gi limits for thumbnailing and model loads),
 and OnlyOffice (bursts to ~1 core). Their requests cover idle and their limits
 cover the spike, which is the shape this pass aimed for everywhere else.
 
-Not in Git, so not changed: k3s's own CoreDNS, metrics-server (no memory
-limit) and Traefik (no requests yet; its HelmChartConfig in
-`traefik/manifests/traefik-config.yaml` is now the only source, so that is
-where they go), and the
+Traefik's come from its HelmChartConfig in
+`traefik/manifests/traefik-config.yaml`: 25m / 96Mi, limit 512Mi, against ~5m
+and ~50Mi (peak 115Mi). Not in Git, so not changed: k3s's own CoreDNS,
+metrics-server (no memory limit), and the
 VictoriaMetrics operator's `config-reloader` sidecars, which have no limit.
 
 The CloudNativePG databases were looked at and left alone: they idle at ~10m

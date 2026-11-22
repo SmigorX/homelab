@@ -14,7 +14,7 @@
 # gone. Do not recreate it: anything under that directory is applied on every
 # k3s start and overwrites this object.
 #
-# Two settings:
+# Four settings:
 #
 # 1. respondingTimeouts on the "websecure" entrypoint, 10 minutes. Traefik's
 #    defaults (60 s in some builds, 0 in others, and a 180 s idleTimeout) reset
@@ -24,6 +24,16 @@
 #    without metallb.io/loadBalancerIPs a recreated Service gets no address at
 #    all, and every HTTP route in the cluster goes with it. 192.168.1.11 is
 #    what the wildcard DNS record points at.
+#
+# 3. Resources, which k3s's chart leaves empty. It idles at ~5m CPU and ~50Mi
+#    (p99 51Mi, peak 115Mi over 14 days, November 2026). The chart derives
+#    GOMEMLIMIT from the limit. No CPU limit, as everywhere else.
+#
+# 4. Pinned to fedora-server. Nothing ties it there - it has no volume - but
+#    every request in the cluster goes through it, and fedora-server is the
+#    node everything stateful already depends on. On fedora-server-2 it would
+#    make that node's reboots a five-minute outage for every web UI, until
+#    the pod was evicted and rescheduled.
 #
 # Docs:
 #   https://docs.k3s.io/helm#customizing-packaged-components-with-helmchartconfig
@@ -46,3 +56,11 @@ spec:
       annotations:
         metallb.io/address-pool: ingress
         metallb.io/loadBalancerIPs: "192.168.1.11"
+    resources:
+      requests:
+        cpu: 25m
+        memory: 96Mi
+      limits:
+        memory: 512Mi
+    nodeSelector:
+      kubernetes.io/hostname: fedora-server
