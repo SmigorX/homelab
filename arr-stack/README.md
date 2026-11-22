@@ -98,7 +98,7 @@ downgrades to a full copy. The mount paths are recorded in the apps' databases
 and in qBittorrent's `.fastresume` files, so they must not change.
 
 `ReadWriteOnce` while three pods mount it is not a contradiction: RWO restricts
-a volume to one *node*, and every pod here except Jellyfin carries
+a volume to one *node*, and every pod here except Jellyfin and FlareSolverr carries
 `nodeSelector: kubernetes.io/hostname: fedora-server`, the node holding
 `/mnt/nas` (see the root README, "Storage"). The PVs themselves have no
 `nodeAffinity`, so that selector is the only thing keeping a pod off a node

@@ -44,9 +44,10 @@ re-downloads roughly 2Gi of models on every restart. PostgreSQL uses
 `local-path-core`, 50Gi.
 
 There is no `nodeAffinity` on the PV. What keeps the server on the node that
-holds the library is the `kubernetes.io/hostname: fedora-server` selector in
-the shared `controllers.main.pod` block of `values.yaml`, which every component
-inherits (see the root README, "Storage"). If the cluster ever grows for real,
+holds the library is the `kubernetes.io/hostname: fedora-server` selector on
+the server's `controllers.main.pod` in `values.yaml`, and the same on
+machine-learning for its model cache (see the root README, "Storage"). Valkey
+has no volume and is not pinned. If the cluster ever grows for real,
 that deserves a hard look at whether a hostPath library belongs in it at all.
 
 ## Secrets

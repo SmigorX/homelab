@@ -14,11 +14,9 @@ controllers:
     # briefly run two Immich servers against one library and one database.
     strategy: Recreate
 
-    # Pinned while local-path volumes live on one node; see README.md, "Storage".
-    # The server's library PV is a hostPath on the same node, too.
-    pod:
-      nodeSelector:
-        kubernetes.io/hostname: fedora-server
+    # No nodeSelector here, where every component would inherit it: only the
+    # server and machine-learning have volumes on fedora-server, so each pins
+    # itself below, and Valkey (an emptyDir queue) runs on either node.
 
     containers:
       main:
@@ -80,6 +78,12 @@ valkey:
 server:
   controllers:
     main:
+      # Pinned while local-path volumes live on one node; see README.md, "Storage".
+      # The library PV is a hostPath on the same node, too.
+      pod:
+        nodeSelector:
+          kubernetes.io/hostname: fedora-server
+
       containers:
         main:
           # CPU: ~4m idle, bursts past 150m while generating thumbnails and
@@ -102,6 +106,12 @@ server:
 machine-learning:
   controllers:
     main:
+      # Pinned while local-path volumes live on one node; see README.md, "Storage".
+      # Its model cache is the local-path-bulk claim immich-ml-cache.
+      pod:
+        nodeSelector:
+          kubernetes.io/hostname: fedora-server
+
       containers:
         main:
           # Models are loaded on demand and unloaded when idle, so this sits

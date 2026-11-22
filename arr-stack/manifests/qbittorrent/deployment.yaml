@@ -220,12 +220,15 @@ spec:
               mountPath: /data/torrents
               subPath: torrents
 
-          # Seeds at ~30m and ~60Mi. The 2Gi limit is room for a large
-          # torrent's piece cache.
+          # Over 14 days to November 2026: ~160m CPU (p95 ~290m) and ~830Mi
+          # working set, p99 1.6Gi - most of it libtorrent's disk cache, which
+          # the kernel reclaims before the limit bites. The request follows
+          # the steady state so the scheduler stops believing it fits in
+          # 256Mi; the 2Gi limit stays as room for a large torrent's pieces.
           resources:
             requests:
-              cpu: 50m
-              memory: 256Mi
+              cpu: 150m
+              memory: 1Gi
             limits:
               memory: 2Gi
 

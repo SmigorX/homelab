@@ -25,12 +25,16 @@ spec:
         - name: paperless
           image: ghcr.io/paperless-ngx/paperless-ngx:3.0.5
 
+          # ~540Mi steady, p99 ~560Mi (November 2026). OCR is the spike: a
+          # large scanned PDF through Tesseract and Ghostscript can take far
+          # more than a quiet fortnight shows, so the limit is generous and
+          # the request is not.
           resources:
             requests:
               cpu: 100m
-              memory: 768Mi
+              memory: 640Mi
             limits:
-              memory: 1Gi
+              memory: 2Gi
 
           ports:
             - name: http

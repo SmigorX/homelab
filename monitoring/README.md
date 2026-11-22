@@ -42,10 +42,11 @@ needs its request twice. With too little free, the first Authentik change after
 this stack landed left the new `authentik-server` Pending, Unschedulable,
 indefinitely. Hence the rule:
 
-**Free requestable memory and CPU must stay above the largest request of any
-RollingUpdate Deployment** — today `authentik-server`'s 768Mi and 200m
-(Paperless also requests 768Mi). Recreate Deployments and StatefulSets replace
-in place and do not count.
+**On each node, free requestable memory and CPU must stay above the largest
+request of any RollingUpdate Deployment that can land there** — today
+Paperless's 640Mi on `fedora-server` and `authentik-server`'s 768Mi and 200m on
+`fedora-server-2`. A pinned Deployment's surge pod can only go to its own node.
+Recreate Deployments and StatefulSets replace in place and do not count.
 
 The *Resources* dashboard computes this as *Memory rolling-update headroom* and
 *CPU rolling-update headroom*. When one goes red, its *by namespace* charts and
@@ -70,6 +71,43 @@ The requests trimmed so far, in case room appears to give any of them back:
 | OnlyOffice | 150m | 50m | ~1m |
 | Radarr, Sonarr | 100m each | 50m each | ~2–4m |
 | Home Assistant | 100m | 50m | ~1m |
+
+### November 2026: requests set to what is used
+
+With a second node there was room to stop under-requesting. Requests below
+use let the scheduler believe a node had space it did not, and put those pods
+first in line for eviction. The rule this pass followed: the memory request
+covers the 14-day p99 of the working set, the limit covers the peak with
+margin, and the CPU request covers the steady rate. Spiky workloads keep a
+modest request and a generous limit, so their peaks borrow free memory instead
+of reserving it around the clock.
+
+| Workload | Before | After | 14-day use (p50 / p99 / peak) |
+| --- | --- | --- | --- |
+| qBittorrent | 50m / 256Mi | 150m / 1Gi, limit 2Gi | ~160m; 830Mi / 1.6Gi / 1.7Gi, mostly disk cache |
+| VMSingle | 50m / 192Mi, limit 1Gi | 100m / 768Mi, limit 1.5Gi | ~77m; 625Mi / 720Mi / 780Mi |
+| Grafana | 160Mi, limit 512Mi | 384Mi, limit 1Gi | 355Mi / 475Mi / 505Mi — it was OOM-killed |
+| Grafana sidecars (each) | 48Mi, limit 128Mi | 96Mi, limit 192Mi | 75Mi / 80Mi / 90Mi |
+| VLSingle | 128Mi, limit 1Gi | 192Mi, limit 1.5Gi | 160Mi / 260Mi / 900Mi on a wide query |
+| vmagent | 25m / 96Mi | 40m / 160Mi | ~32m; 130Mi / 160Mi / 180Mi |
+| vlagent, vmalert, VM operator | 48 / 48 / 64Mi | 64 / 64 / 96Mi | each just above its old request |
+| Argo CD application-controller | 100m / 384Mi | 150m / 512Mi | ~40m, p95 230m; 420Mi / 520Mi / 760Mi |
+| authentik-worker | 150m | 200m | ~185m around the clock |
+| FlareSolverr | limit 2Gi | limit 3Gi | 145Mi / 840Mi / 2041Mi — at the old limit |
+| Paperless | 768Mi, limit 1Gi | 640Mi, limit 2Gi | 540Mi / 560Mi / 605Mi; the limit is for OCR |
+| Yamtrack | 512Mi | 448Mi | 380Mi / 390Mi / 450Mi |
+| Samba | 50m / 128Mi | 25m / 64Mi | ~0m; 10Mi / 11Mi / 32Mi |
+
+Left as they were on purpose: Jellyfin (512Mi request, 4Gi limit: ~380Mi idle,
+but 3.4Gi and three cores during a software transcode), immich-server and
+immich-machine-learning (4Gi and 6Gi limits for thumbnailing and model loads),
+and OnlyOffice (bursts to ~1 core). Their requests cover idle and their limits
+cover the spike, which is the shape this pass aimed for everywhere else.
+
+Not in Git, so not changed: k3s's own CoreDNS, metrics-server (no memory
+limit) and Traefik (no requests at all; see `traefik/manifests/traefik-config.yaml`
+for why its HelmChartConfig is not a safe place to add them yet), and the
+VictoriaMetrics operator's `config-reloader` sidecars, which have no limit.
 
 The CloudNativePG databases were looked at and left alone: they idle at ~10m
 and ~80Mi against 100m and 256Mi, but a restart per change and a database's

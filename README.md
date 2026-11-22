@@ -111,7 +111,7 @@ to the other node's address alone:
 | `8472/udp` | both | flannel VXLAN, all pod-to-pod traffic across nodes | cross-node pod IPs, Service IPs and cluster DNS time out; Traefik cannot reach pods on the agent |
 | `7946/tcp` + `/udp` | both | MetalLB speakers' memberlist | split brain: both speakers announce every `externalTrafficPolicy: Cluster` address, LAN clients flip between the two MACs, and the speakers rewrite each other's `ServiceL2Status` in a loop fast enough to stall the API server |
 | `10250/tcp` | both | kubelet, scraped by vmagent | the other node's kubelet metrics go missing |
-| `9100/tcp` | agent | node-exporter, scraped by vmagent | the agent's host metrics go missing |
+| `9100/tcp` | both | node-exporter, scraped by vmagent from whichever node it runs on | that node's host metrics go missing |
 | `2049/tcp` | server | NFS, Jellyfin's media ([arr-stack/README.md](arr-stack/README.md#jellyfin-runs-on-fedora-server-2)) | the Jellyfin pod waits in `ContainerCreating` |
 
 The pod and Service ranges, `10.42.0.0/16` and `10.43.0.0/16`, are in each

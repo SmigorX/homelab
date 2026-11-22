@@ -18,10 +18,11 @@ victoria-metrics-operator:
   admissionWebhooks:
     enabled: false
 
+  # ~63Mi steady, p99 ~80Mi (November 2026).
   resources:
     requests:
       cpu: 20m
-      memory: 64Mi
+      memory: 96Mi
     limits:
       memory: 256Mi
 
@@ -46,21 +47,24 @@ vmsingle:
     nodeSelector:
       kubernetes.io/hostname: fedora-server
 
+    # ~77m and ~625Mi steady, p99 ~720Mi, peak ~780Mi over 14 days
+    # (November 2026). The old 192Mi request was a third of what it uses.
     resources:
       requests:
-        cpu: 50m
-        memory: 192Mi
+        cpu: 100m
+        memory: 768Mi
       limits:
-        memory: 1Gi
+        memory: 1536Mi
 
 vmagent:
   spec:
     scrapeInterval: 30s
 
+    # ~32m and ~130Mi steady, p99 ~160Mi (November 2026).
     resources:
       requests:
-        cpu: 25m
-        memory: 96Mi
+        cpu: 40m
+        memory: 160Mi
       limits:
         memory: 384Mi
 
@@ -69,7 +73,7 @@ vmalert:
     resources:
       requests:
         cpu: 20m
-        memory: 48Mi
+        memory: 64Mi
       limits:
         memory: 192Mi
 
@@ -272,13 +276,15 @@ vlsingle:
       kubernetes.io/hostname: fedora-server
 
     # The limit is for queries: a wide search over many days is what grows
-    # it, not ingestion, which is a few hundred lines a minute here.
+    # it, not ingestion, which is a few hundred lines a minute here. ~160Mi
+    # steady, but a query peaked at ~900Mi against the old 1Gi limit in the
+    # 14 days to November 2026.
     resources:
       requests:
         cpu: 25m
-        memory: 128Mi
+        memory: 192Mi
       limits:
-        memory: 1Gi
+        memory: 1536Mi
 
 # One pod per node (a DaemonSet), so one here.
 vlagent:
@@ -311,10 +317,12 @@ vlagent:
         mountPath: /host/var/log
         readOnly: true
 
+    # ~48Mi steady, p99 ~90Mi (November 2026). One per node, so this is paid
+    # twice.
     resources:
       requests:
         cpu: 25m
-        memory: 48Mi
+        memory: 64Mi
       limits:
         memory: 256Mi
 
@@ -441,20 +449,24 @@ grafana:
         hosts:
           - grafana.k8s.internal.smigorx.eu
 
+  # Was 160Mi / 512Mi and got OOM-killed: ~355Mi steady, p99 ~475Mi, peak
+  # ~505Mi in the 14 days to November 2026. Dashboards with many panels
+  # querying at once are what push it.
   resources:
     requests:
       cpu: 50m
-      memory: 160Mi
+      memory: 384Mi
     limits:
-      memory: 512Mi
+      memory: 1Gi
 
+  # Each of the two sidecars sits at ~75Mi (peak ~90Mi, November 2026).
   sidecar:
     resources:
       requests:
         cpu: 10m
-        memory: 48Mi
+        memory: 96Mi
       limits:
-        memory: 128Mi
+        memory: 192Mi
 
     # Everything the sidecar loads, which is every ConfigMap in this namespace
     # labelled grafana_dashboard: "1", goes in one folder. Provisioned

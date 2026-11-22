@@ -34,10 +34,13 @@ spec:
           # CAP_NET_ADMIN. Connect by IP or DNS name instead.
           image: servercontainers/samba:smbd-only-a3.24.1-s4.23.8-r0
 
+          # smbd idles at ~10Mi and ~0m (p99 ~11Mi, November 2026). Transfers
+          # mostly go through the host's page cache, not this process; the
+          # limit is for a client holding many files open.
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
+              cpu: 25m
+              memory: 64Mi
             limits:
               memory: 1Gi
 

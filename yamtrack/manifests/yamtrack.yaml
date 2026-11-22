@@ -71,10 +71,11 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 20
 
+          # ~380Mi steady, peak ~450Mi over 14 days (November 2026).
           resources:
             requests:
               cpu: 50m
-              memory: 512Mi
+              memory: 448Mi
             limits:
               memory: 1Gi
 

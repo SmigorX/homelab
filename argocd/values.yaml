@@ -30,10 +30,11 @@ controller:
   replicas: 1
 
   # The busiest of the five: reconciling every Application on a timer.
+  # ~40m and ~420Mi steady, p95 ~230m and p99 ~520Mi (November 2026).
   resources:
     requests:
-      cpu: 100m
-      memory: 384Mi
+      cpu: 150m
+      memory: 512Mi
     limits:
       memory: 1Gi
 
