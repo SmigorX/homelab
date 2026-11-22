@@ -115,6 +115,70 @@ server:
         path = "/vault/data"
       }
 
+  # Auto-unseal, without a KMS: this sidecar posts the threshold's worth of
+  # unseal keys to Vault's own API whenever it finds it sealed. The keys come
+  # from the vault-unseal-keys Secret, created by hand (see README.md,
+  # "Auto-unseal"); it cannot come from Vault through VSO, because a sealed
+  # Vault serves nothing. This deliberately gives up what sealing protects:
+  # anyone who can read that Secret, or the node's disk, can unseal Vault.
+  extraContainers:
+    - name: auto-unseal
+      image: "hashicorp/vault:2.0.4"
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          # printf is a builtin, so the key never appears in a process's
+          # argv; wget sends the request body from a file for the same
+          # reason. The file lives in an emptyDir and is removed after
+          # each attempt.
+          api=http://127.0.0.1:8200/v1/sys
+          while true; do
+            if wget -qO- "$api/seal-status" 2>/dev/null | grep -q '"sealed":true'; then
+              if [ -r /unseal/key1 ]; then
+                echo "$(date -Iseconds) sealed, unsealing"
+                for k in /unseal/key*; do
+                  printf '{"key":"%s"}' "$(cat "$k")" > /work/body
+                  wget -qO /dev/null --post-file=/work/body "$api/unseal" ||
+                    echo "$(date -Iseconds) $k rejected"
+                  rm -f /work/body
+                done
+              else
+                echo "$(date -Iseconds) sealed, but no vault-unseal-keys Secret is mounted"
+              fi
+            fi
+            sleep 10
+          done
+      securityContext:
+        allowPrivilegeEscalation: false
+      volumeMounts:
+        - name: unseal-keys
+          mountPath: /unseal
+          readOnly: true
+        - name: unseal-work
+          mountPath: /work
+      resources:
+        requests:
+          cpu: 5m
+          memory: 16Mi
+        limits:
+          memory: 32Mi
+
+  volumes:
+    # optional: a missing Secret must not stop Vault from starting. The
+    # sidecar then logs that it cannot help, and unsealing by hand still
+    # works.
+    - name: unseal-keys
+      secret:
+        secretName: vault-unseal-keys
+        optional: true
+        # Group-readable: the pod runs as uid 100 with fsGroup 1000, and the
+        # files are owned by root.
+        defaultMode: 0440
+    - name: unseal-work
+      emptyDir:
+        medium: Memory
+        sizeLimit: 1Mi
+
   serviceAccount:
     create: true
 

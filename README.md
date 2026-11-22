@@ -1,7 +1,8 @@
 # Homelab
 
-A single-node k3s cluster on `fedora-server` (Fedora 43, k3s 1.36), deployed
-entirely by Argo CD from this repository. Each directory is one Argo CD
+A k3s cluster on `fedora-server` (Fedora 43, k3s 1.36, the server) and
+`fedora-server-2` (Fedora 45, an agent), deployed entirely by Argo CD from this
+repository. Each directory is one Argo CD
 Application; its README covers what is specific to it. This file covers what
 they share.
 
@@ -84,11 +85,44 @@ else is waiting for. Scheduling is by requests, and free requests must stay
 above the largest RollingUpdate Deployment's request or its next rollout
 hangs; see [monitoring/README.md](monitoring/README.md#the-resource-budget).
 
-**One node.** `ReadWriteOnce` volumes are shared between pods freely, since RWO
-binds to a node, not a pod. That also means RWO does not stop a rolling update
+**Pinned pods share a node.** `ReadWriteOnce` volumes are shared between pods
+freely, since RWO binds to a node, not a pod. That also means RWO does not stop a rolling update
 from running two copies against the same data, so apps with state on a volume
 use `strategy: Recreate`. Two exceptions still roll: Paperless and Grafana
 (whose SQLite database is on `vmks-grafana`).
 
 **Monitoring and logs** are in [monitoring/README.md](monitoring/README.md):
 metrics, dashboards, alerts to Discord, and 30 days of pod and host logs.
+
+## Nodes and the firewall
+
+| Node | Address | Role | firewalld zone the other node lands in |
+| --- | --- | --- | --- |
+| `fedora-server` | `192.168.1.10` | k3s server, all storage | `lan` (source `192.168.1.0/24`) |
+| `fedora-server-2` | `192.168.1.90` | k3s agent, Jellyfin's iGPU | `FedoraServer` (default, on `eno1`) |
+
+firewalld on both hosts rejects by default, and nothing here is opened by the
+k3s installer. Every port the nodes need from each other is a rich rule scoped
+to the other node's address alone:
+
+| Port | Open on | Used by | When it is missing |
+| --- | --- | --- | --- |
+| `6443/tcp` | server | agent → API server | the agent never joins (already open to the whole LAN in `lan`) |
+| `8472/udp` | both | flannel VXLAN, all pod-to-pod traffic across nodes | cross-node pod IPs, Service IPs and cluster DNS time out; Traefik cannot reach pods on the agent |
+| `7946/tcp` + `/udp` | both | MetalLB speakers' memberlist | split brain: both speakers announce every `externalTrafficPolicy: Cluster` address, LAN clients flip between the two MACs, and the speakers rewrite each other's `ServiceL2Status` in a loop fast enough to stall the API server |
+| `10250/tcp` | both | kubelet, scraped by vmagent | the other node's kubelet metrics go missing |
+| `9100/tcp` | agent | node-exporter, scraped by vmagent | the agent's host metrics go missing |
+| `2049/tcp` | server | NFS, Jellyfin's media ([arr-stack/README.md](arr-stack/README.md#jellyfin-runs-on-fedora-server-2)) | the Jellyfin pod waits in `ContainerCreating` |
+
+The pod and Service ranges, `10.42.0.0/16` and `10.43.0.0/16`, are in each
+host's `trusted` zone. On `fedora-server`, each rule looks like this, with the
+port and protocol swapped in:
+
+    sudo firewall-cmd --permanent --zone=lan --add-rich-rule='rule family="ipv4" source address="192.168.1.90" port port="8472" protocol="udp" accept'
+
+and on `fedora-server-2`:
+
+    sudo firewall-cmd --permanent --zone=FedoraServer --add-rich-rule='rule family="ipv4" source address="192.168.1.10" port port="8472" protocol="udp" accept'
+
+followed by `sudo firewall-cmd --reload` on each. `sudo firewall-cmd --zone=<zone> --list-rich-rules` shows what is open. A third node needs the same set
+in both directions, against every existing node.

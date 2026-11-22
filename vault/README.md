@@ -8,8 +8,9 @@ Kubernetes `Secret`. Every app's secrets come through this, from its
 `manifests/vault-secret.yaml`.
 
 Vault itself runs in "standalone" mode: one replica, Shamir-sealed, file
-storage backend on the `data-vault-0` PVC (`local-path-core`). No
-auto-unseal is configured, which matters operationally — see below.
+storage backend on the `data-vault-0` PVC (`local-path-core`). A sidecar
+unseals it after every restart from keys kept in a Kubernetes Secret — see
+[Auto-unseal](#auto-unseal).
 
 ## One-time bootstrap
 
@@ -32,12 +33,15 @@ Unseal (repeat with 3 different keys — default Shamir threshold is 3-of-5):
 kubectl -n vault exec -it vault-0 -- vault operator unseal
 ```
 
-**Every Vault pod restart re-seals it.** Until auto-unseal (e.g. via a
-cloud KMS or Vault Transit) is set up, a node reboot or pod eviction means
-Vault serves nothing — including to the Vault Secrets Operator — until
-someone runs `vault operator unseal` three more times. Existing Secrets stay
-as they are, but nothing new or rotated syncs. The `VaultSecretsOperatorFailing`
-alert in monitoring/ posts to Discord when this has gone on for 20 minutes.
+**Every Vault pod restart re-seals it.** The `auto-unseal` sidecar undoes
+that within ten seconds once the `vault-unseal-keys` Secret exists; create it
+now, as [Auto-unseal](#auto-unseal) describes. Without it, a node reboot or pod
+eviction means Vault serves nothing — including to the Vault Secrets
+Operator — until someone runs `vault operator unseal` three more times.
+Existing Secrets stay as they are, but nothing new or rotated syncs, and VSO's
+retries rewrite every `VaultStaticSecret`'s status in a loop that loads the API
+server. The `VaultSecretsOperatorFailing` alert in monitoring/ posts to Discord
+when this has gone on for 20 minutes.
 
 Log in and enable the Kubernetes auth method:
 
@@ -130,6 +134,43 @@ read every path under `secret/`. `vault read auth/kubernetes/role/default`
 shows what the live role is bound to. The tighter alternative, not done here,
 is a policy per app scoped to `secret/data/<app>/*`, a role bound to that
 app's namespace, and a `vaultAuthRef` to a matching `VaultAuth`.
+
+## Auto-unseal
+
+Vault cannot be stopped from sealing: the root key lives only in memory, so a
+restarted process always starts sealed. What can be automated is the unseal.
+The supported auto-unseal mechanisms all want something external to hold the
+key — a cloud KMS, an HSM, or another Vault for Transit — and this cluster has
+none of those, so `values.yaml` adds a sidecar instead. Every ten seconds it
+asks `/v1/sys/seal-status`, and if Vault is sealed, posts each key under
+`/unseal` to `/v1/sys/unseal`.
+
+The keys come from a Secret that is created by hand and never committed. It
+cannot come from Vault through VSO, since a sealed Vault serves nothing. Three
+keys, the Shamir threshold, are enough; keep all five, and the root token,
+wherever they were stored at bootstrap. In fish, so that the keys stay out of
+shell history:
+
+    read -s -P 'unseal key 1: ' k1
+    read -s -P 'unseal key 2: ' k2
+    read -s -P 'unseal key 3: ' k3
+    kubectl -n vault create secret generic vault-unseal-keys \
+      --from-literal=key1=$k1 --from-literal=key2=$k2 --from-literal=key3=$k3
+    set -e k1 k2 k3
+
+The sidecar mounts the Secret as optional, so Vault still starts without it;
+the sidecar then logs that it has nothing to unseal with, and the manual
+unseal above still works. Check what it did with:
+
+    kubectl -n vault logs vault-0 -c auto-unseal
+
+**This gives up what sealing is for.** Anyone who can read that Secret — or
+the k3s datastore on `fedora-server`, where Secrets are stored unencrypted
+unless k3s runs with `--secrets-encryption` — can unseal Vault. On this
+cluster that is the same set of people who could read Vault's data off the
+`data-vault-0` volume anyway, which is why it is acceptable here. Revert it by
+deleting the Secret, the `extraContainers` and `volumes` blocks in
+`values.yaml`, and the pod.
 
 ## Adding a secret
 
