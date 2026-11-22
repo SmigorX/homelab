@@ -30,13 +30,18 @@ Kubernetes Secrets. Vault re-seals on every restart and needs three manual
 unseals; see [vault/README.md](vault/README.md). OIDC clients for Authentik
 follow [authentik/README.md](authentik/README.md#adding-an-oidc-application).
 
-**Storage** is one of two classes from `local-path-provisioner`, both
+**Storage** is one of three classes from `local-path-provisioner`, all
 `reclaimPolicy: Retain` and `WaitForFirstConsumer`:
 
-| Class | Host path | For |
-| --- | --- | --- |
-| `local-path-core` | `/mnt/nas/core/k3s` | databases, app state |
-| `local-path-bulk` | `/mnt/nas/bulk/k3s` | large, regenerable or media data |
+| Class | Host path | Disk | For |
+| --- | --- | --- | --- |
+| `local-path-core` | `/mnt/nas/core/k3s` | `md0`, the HDD mirror | databases, app state |
+| `local-path-bulk` | `/mnt/nas/bulk/k3s` | the 4TB HDD, not mirrored | large, regenerable or media data |
+| `local-path-ssd` | `/var/lib/local-path-ssd` | the OS SSD, not mirrored | busy data that can be lost with the node: metrics, logs, Grafana |
+
+`/var/lib/local-path-ssd` needs `container_file_t` (SELinux is enforcing, and
+nothing relabels a hostPath): `sudo semanage fcontext -a -t container_file_t
+'/var/lib/local-path-ssd(/.*)?'` and `sudo restorecon -R` on it.
 
 Always name the class: left out, a claim falls through to k3s's built-in
 `local-path`, which is `reclaimPolicy: Delete` and not on the NAS. Directories
@@ -88,8 +93,7 @@ hangs; see [monitoring/README.md](monitoring/README.md#the-resource-budget).
 **Pinned pods share a node.** `ReadWriteOnce` volumes are shared between pods
 freely, since RWO binds to a node, not a pod. That also means RWO does not stop a rolling update
 from running two copies against the same data, so apps with state on a volume
-use `strategy: Recreate`. Two exceptions still roll: Paperless and Grafana
-(whose SQLite database is on `vmks-grafana`).
+use `strategy: Recreate`. Paperless is the one exception that still rolls.
 
 **Monitoring and logs** are in [monitoring/README.md](monitoring/README.md):
 metrics, dashboards, alerts to Discord, and 30 days of pod and host logs.

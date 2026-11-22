@@ -1,0 +1,108 @@
+# Metrics, logs and Grafana's database on fedora-server's SSD instead of the
+# md0 mirror. They were most of the mirror's writes, and the mirror shares a
+# spindle with the bulk pool (see README.md, "Storage").
+#
+# Static PVs, pre-bound by claimRef, rather than provisioned ones, so the data
+# could be copied in before anything started: hostPath.type: Directory keeps a
+# pod in ContainerCreating until its directory exists, so none of them can come
+# up on an empty volume. The operator creates vmsingle-vmks and vlsingle-vmks
+# from the VMSingle and VLSingle specs in values.yaml; their storageClassName
+# has to match the one here for them to bind. Grafana's claim is ours,
+# handed to the chart through persistence.existingClaim.
+#
+# The SSD is not mirrored. It also holds the OS and k3s's datastore, so losing
+# it loses the node, and this data with it.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vmsingle-vmks-ssd
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  storageClassName: local-path-ssd
+  claimRef:
+    namespace: monitoring
+    name: vmsingle-vmks
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - fedora-server
+  hostPath:
+    path: /var/lib/local-path-ssd/vmsingle-vmks
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vlsingle-vmks-ssd
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  storageClassName: local-path-ssd
+  claimRef:
+    namespace: monitoring
+    name: vlsingle-vmks
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - fedora-server
+  hostPath:
+    path: /var/lib/local-path-ssd/vlsingle-vmks
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vmks-grafana-ssd
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  storageClassName: local-path-ssd
+  claimRef:
+    namespace: monitoring
+    name: vmks-grafana-ssd
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - fedora-server
+  hostPath:
+    path: /var/lib/local-path-ssd/vmks-grafana
+    type: Directory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vmks-grafana-ssd
+  namespace: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path-ssd
+  volumeName: vmks-grafana-ssd
+  resources:
+    requests:
+      storage: 1Gi

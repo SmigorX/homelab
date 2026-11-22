@@ -36,6 +36,24 @@ storageClassConfigs:
       - node: fedora-server
         paths:
           - /mnt/nas/bulk/k3s
+
+  # fedora-server's SSD, the disk the OS and k3s's datastore are on: fast, but
+  # not mirrored, so only for data that can be lost with the node anyway. The
+  # monitoring volumes live here as static PVs (monitoring/manifests/ssd-volumes.yaml),
+  # which is why the directory must exist with container_file_t before anything
+  # uses it; see README.md, "Storage".
+  local-path-ssd:
+    storageClass:
+      create: true
+      defaultClass: false
+      defaultVolumeType: hostPath
+      reclaimPolicy: Retain
+      volumeBindingMode: WaitForFirstConsumer
+
+    nodePathMap:
+      - node: fedora-server
+        paths:
+          - /var/lib/local-path-ssd
 # The chart declares none. The provisioner only wakes up when a PVC needs
 # binding, so this is a floor rather than a working set.
 resources:

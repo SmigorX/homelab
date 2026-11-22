@@ -331,13 +331,28 @@ VMAlert's UI is still not exposed:
 
 ## Storage
 
-All on `local-path-core`:
+All on `local-path-ssd`, fedora-server's SSD, as static PVs in
+[manifests/ssd-volumes.yaml](manifests/ssd-volumes.yaml):
 
 | Claim | Size | Holds |
 | --- | --- | --- |
-| `vmsingle-vmks` | 10Gi | metrics |
-| `vlsingle-vmks` | 10Gi | logs |
-| `vmks-grafana` | 1Gi | Grafana's SQLite database: users, preferences, anything built by hand in the UI |
+| `vmsingle-vmks` | 10Gi | metrics (~1.3GiB at 30 days) |
+| `vlsingle-vmks` | 10Gi | logs (capped at 8GiB by `retentionMaxDiskSpaceUsageBytes`) |
+| `vmks-grafana-ssd` | 1Gi | Grafana's SQLite database: users, preferences, anything built by hand in the UI |
+
+They moved off `local-path-core` in November 2026. They were most of the
+writes to the `md0` mirror, which shares a disk with the bulk pool, and every
+database on the mirror queued behind them. The SSD is not mirrored, but it also
+holds the OS and k3s's datastore: losing it loses the node, and this data with
+it.
+
+The PVs are static and pre-bound by `claimRef`, with `hostPath.type:
+Directory`, so a pod waits in `ContainerCreating` rather than starting on an
+empty directory. That is also how the data was moved: the new pods waited
+while the old directories were copied in. The operator still creates
+`vmsingle-vmks` and `vlsingle-vmks` itself; the `storageClassName` in
+values.yaml is what makes them bind to these PVs. The old volumes on
+`/mnt/nas/core/k3s` are Released and kept as a fallback until deleted by hand.
 
 The dashboards in `manifests/dashboards/` are re-created from Git and need no
 backup. None of the claims may fall back to k3s's default `local-path` class,

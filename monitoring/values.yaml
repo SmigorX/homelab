@@ -34,9 +34,10 @@ vmsingle:
 
     # Explicit for the same reason as everywhere else in this repo: left out,
     # the claim falls through to k3s's built-in local-path class, which is
-    # node-local and reclaimPolicy Delete.
+    # node-local and reclaimPolicy Delete. local-path-ssd binds the
+    # operator's claim to the static PV in manifests/ssd-volumes.yaml.
     storage:
-      storageClassName: local-path-core
+      storageClassName: local-path-ssd
       accessModes:
         - ReadWriteOnce
       resources:
@@ -263,8 +264,9 @@ vlsingle:
     # instead of filling the volume.
     retentionMaxDiskSpaceUsageBytes: 8GiB
 
+    # On the SSD, bound to the static PV in manifests/ssd-volumes.yaml.
     storage:
-      storageClassName: local-path-core
+      storageClassName: local-path-ssd
       accessModes:
         - ReadWriteOnce
       resources:
@@ -417,14 +419,18 @@ grafana:
       default_home_dashboard_path: /var/lib/grafana/dashboards/default/health.json
 
   # Dashboards come from Git, but users, preferences and anything built by
-  # hand in the UI live in Grafana's SQLite database.
+  # hand in the UI live in Grafana's SQLite database. The claim is ours, on the
+  # SSD (manifests/ssd-volumes.yaml), so the chart does not create one.
   persistence:
     enabled: true
     type: pvc
-    storageClassName: local-path-core
-    accessModes:
-      - ReadWriteOnce
-    size: 1Gi
+    existingClaim: vmks-grafana-ssd
+
+  # Recreate, not the chart's RollingUpdate: two Grafanas writing one SQLite
+  # file during a rollout is how it gets corrupted, and a ReadWriteOnce claim
+  # does not stop that on one node.
+  deploymentStrategy:
+    type: Recreate
 
   # Pinned while local-path volumes live on one node; see README.md, "Storage".
   nodeSelector:
