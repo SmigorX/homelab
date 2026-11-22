@@ -372,7 +372,7 @@
       "id": 6,
       "gridPos": {
         "h": 3,
-        "w": 6,
+        "w": 5,
         "x": 0,
         "y": 4
       }
@@ -437,8 +437,8 @@
       "id": 7,
       "gridPos": {
         "h": 3,
-        "w": 6,
-        "x": 6,
+        "w": 5,
+        "x": 5,
         "y": 4
       }
     },
@@ -502,8 +502,8 @@
       "id": 8,
       "gridPos": {
         "h": 3,
-        "w": 6,
-        "x": 12,
+        "w": 5,
+        "x": 10,
         "y": 4
       }
     },
@@ -571,8 +571,73 @@
       "id": 9,
       "gridPos": {
         "h": 3,
-        "w": 6,
-        "x": 18,
+        "w": 5,
+        "x": 15,
+        "y": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Nodes not ready",
+      "description": "Nodes whose kubelet is not reporting Ready, or that are cordoned. A cordoned node keeps its running pods but takes no new ones, so pinned workloads cannot restart.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count((max by (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\"}) == 0) or (max by (node) (kube_node_spec_unschedulable) == 1)) or vector(0)",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "wideLayout": true
+      },
+      "id": 17,
+      "gridPos": {
+        "h": 3,
+        "w": 4,
+        "x": 20,
         "y": 4
       }
     },

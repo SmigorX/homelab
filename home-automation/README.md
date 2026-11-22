@@ -232,7 +232,7 @@ wildcard record, so neither host needed a DNS change.
 
 MQTT is raw TCP and bypasses Traefik entirely. The broker is a `LoadBalancer` on
 **192.168.1.13** from the `ingress` MetalLB pool, requested explicitly through
-`metallb.universe.tf/loadBalancerIPs` because that pool sets
+`metallb.io/loadBalancerIPs` because that pool sets
 `autoAssign: false`. `.11` is Traefik, `.12` samba and `.14` Forgejo's SSH.
 
 Exposing the broker on the LAN is what makes Wi-Fi devices (ESPHome, Tasmota,

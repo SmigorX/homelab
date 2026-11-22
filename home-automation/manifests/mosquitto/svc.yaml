@@ -8,8 +8,8 @@ metadata:
   name: mosquitto
   namespace: home-automation
   annotations:
-    metallb.universe.tf/address-pool: ingress
-    metallb.universe.tf/loadBalancerIPs: 192.168.1.13
+    metallb.io/address-pool: ingress
+    metallb.io/loadBalancerIPs: 192.168.1.13
 spec:
   type: LoadBalancer
 

@@ -46,7 +46,7 @@ Note this makes the account root-equivalent *within the share*.
 SMB is raw TCP, so this does not go through Traefik. The Service is a
 `LoadBalancer` on **192.168.1.12**, taken from the `ingress` MetalLB pool.
 That pool sets `autoAssign: false`, so the address is requested explicitly
-through the `metallb.universe.tf/loadBalancerIPs` annotation.
+through the `metallb.io/loadBalancerIPs` annotation.
 
 The pool is `192.168.1.11`–`192.168.1.20`: `.11` Traefik, `.12` samba, `.13`
 Mosquitto, `.14` Forgejo's SSH. Keep that range out of the router's DHCP pool.

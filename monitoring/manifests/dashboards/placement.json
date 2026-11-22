@@ -1,0 +1,1546 @@
+{
+  "uid": "homelab-placement",
+  "title": "Placement",
+  "description": "Which workloads run on which node, and how full each node is.",
+  "tags": [
+    "homelab"
+  ],
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "schemaVersion": 41,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "templating": {
+    "list": [
+      {
+        "type": "query",
+        "name": "node",
+        "label": "Node",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "definition": "label_values(kube_node_info, node)",
+        "query": {
+          "query": "label_values(kube_node_info, node)",
+          "refId": "node"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "type": "query",
+        "name": "namespace",
+        "label": "Namespace",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "definition": "label_values(kube_pod_info, namespace)",
+        "query": {
+          "query": "label_values(kube_pod_info, namespace)",
+          "refId": "namespace"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "type": "dashboards",
+      "tags": [
+        "homelab"
+      ],
+      "asDropdown": false,
+      "includeVars": false,
+      "keepTime": true,
+      "title": "Homelab",
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
+  "panels": [
+    {
+      "type": "row",
+      "title": "Nodes",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1
+    },
+    {
+      "type": "table",
+      "title": "Nodes",
+      "description": "Requests are what the scheduler has reserved, and what decides whether the next pod fits; used is the host's real CPU busy time and memory over the last five minutes, page cache excluded. A cordoned node keeps its pods but takes no new ones.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node, role) (kube_node_role{node=~\"$node\"})",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\", node=~\"$node\"})",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node) (kube_node_spec_unschedulable{node=~\"$node\"})",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count by (node) ((max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\", node!=\"\"}))",
+          "refId": "D",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node) (kube_node_status_allocatable{resource=\"cpu\", node=~\"$node\"})",
+          "refId": "E",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "100 * sum by (node) (kube_pod_container_resource_requests{resource=\"cpu\", node=~\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) / max by (node) (kube_node_status_allocatable{resource=\"cpu\", node=~\"$node\"})",
+          "refId": "F",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node) (label_replace(100 * (1 - sum by (nodename) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]) * on (instance) group_left (nodename) node_uname_info{nodename=~\"$node\"}) / count by (nodename) (node_cpu_seconds_total{mode=\"idle\"} * on (instance) group_left (nodename) node_uname_info{nodename=~\"$node\"})), \"node\", \"$1\", \"nodename\", \"(.*)\"))",
+          "refId": "G",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node) (kube_node_status_allocatable{resource=\"memory\", node=~\"$node\"})",
+          "refId": "H",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "100 * sum by (node) (kube_pod_container_resource_requests{resource=\"memory\", node=~\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) / max by (node) (kube_node_status_allocatable{resource=\"memory\", node=~\"$node\"})",
+          "refId": "I",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node) (label_replace(100 * (1 - sum by (nodename) (node_memory_MemAvailable_bytes * on (instance) group_left (nodename) node_uname_info{nodename=~\"$node\"}) / sum by (nodename) (node_memory_MemTotal_bytes * on (instance) group_left (nodename) node_uname_info{nodename=~\"$node\"})), \"node\", \"$1\", \"nodename\", \"(.*)\"))",
+          "refId": "J",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node, os_image, kernel_version) (kube_node_info{node=~\"$node\"})",
+          "refId": "K",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "node",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "node",
+                "role",
+                "Value #B",
+                "Value #C",
+                "Value #D",
+                "Value #E",
+                "Value #F",
+                "Value #G",
+                "Value #H",
+                "Value #I",
+                "Value #J",
+                "os_image",
+                "kernel_version"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "node": 0,
+              "role": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4,
+              "Value #E": 5,
+              "Value #F": 6,
+              "Value #G": 7,
+              "Value #H": 8,
+              "Value #I": 9,
+              "Value #J": 10,
+              "os_image": 11,
+              "kernel_version": 12
+            },
+            "renameByName": {
+              "node": "Node",
+              "role": "Role",
+              "Value #B": "Ready",
+              "Value #C": "Schedulable",
+              "Value #D": "Pods",
+              "Value #E": "CPU",
+              "Value #F": "CPU req",
+              "Value #G": "CPU used",
+              "Value #H": "Memory",
+              "Value #I": "Mem req",
+              "Value #J": "Mem used",
+              "os_image": "OS",
+              "kernel_version": "Kernel"
+            },
+            "excludeByName": {}
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Node"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 140
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Role"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ready"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Ready",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "0": {
+                        "text": "Not ready",
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Schedulable"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "yes",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "cordoned",
+                        "color": "orange",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 105
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pods"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 60
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix: cores"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 85
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU req"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 95
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 85
+                    },
+                    {
+                      "color": "red",
+                      "value": 95
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 95
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 85
+                    },
+                    {
+                      "color": "red",
+                      "value": 95
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Mem req"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 95
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 85
+                    },
+                    {
+                      "color": "red",
+                      "value": 95
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Mem used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 95
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 85
+                    },
+                    {
+                      "color": "red",
+                      "value": 95
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2
+    },
+    {
+      "type": "row",
+      "title": "Workloads on each node",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 3
+    },
+    {
+      "type": "table",
+      "title": "Workloads on $node",
+      "description": "Running and pending pods grouped by what owns them. A Deployment's ReplicaSets are folded into the Deployment, CronJob runs into the CronJob; a Cluster is a CloudNativePG Postgres. Requests are what the scheduler reserved on the node; used is the last five minutes. Most pods here are pinned with a nodeSelector (see the root README, \"Storage\"), which no metric exposes: this shows where pods run, not where they are allowed to.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count by (namespace, kind, workload, node) ((max by (namespace, pod, kind, workload) (label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"ReplicaSet\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\"), \"kind\", \"Deployment\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"Job\", owner_name=~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.+)-[0-9]+\"), \"kind\", \"CronJob\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod) (kube_pod_owner{owner_kind=\"<none>\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"pod\", \"(.*)\"), \"kind\", \"Pod\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_kind, owner_name) (kube_pod_owner{owner_kind!~\"ReplicaSet|<none>\", owner_name!~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)\"), \"kind\", \"$1\", \"owner_kind\", \"(.*)\")) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=\"$node\", node!=\"\"}) and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1000 * sum by (namespace, kind, workload, node) (sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\"}) * on (namespace, pod) group_left (kind, workload, node) (max by (namespace, pod, kind, workload) (label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"ReplicaSet\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\"), \"kind\", \"Deployment\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"Job\", owner_name=~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.+)-[0-9]+\"), \"kind\", \"CronJob\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod) (kube_pod_owner{owner_kind=\"<none>\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"pod\", \"(.*)\"), \"kind\", \"Pod\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_kind, owner_name) (kube_pod_owner{owner_kind!~\"ReplicaSet|<none>\", owner_name!~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)\"), \"kind\", \"$1\", \"owner_kind\", \"(.*)\")) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=\"$node\", node!=\"\"}) and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1000 * sum by (namespace, kind, workload, node) (sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{container!=\"\", container!=\"POD\"}[5m])) * on (namespace, pod) group_left (kind, workload, node) (max by (namespace, pod, kind, workload) (label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"ReplicaSet\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\"), \"kind\", \"Deployment\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"Job\", owner_name=~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.+)-[0-9]+\"), \"kind\", \"CronJob\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod) (kube_pod_owner{owner_kind=\"<none>\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"pod\", \"(.*)\"), \"kind\", \"Pod\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_kind, owner_name) (kube_pod_owner{owner_kind!~\"ReplicaSet|<none>\", owner_name!~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)\"), \"kind\", \"$1\", \"owner_kind\", \"(.*)\")) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=\"$node\", node!=\"\"}) and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (namespace, kind, workload, node) (sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\"}) * on (namespace, pod) group_left (kind, workload, node) (max by (namespace, pod, kind, workload) (label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"ReplicaSet\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\"), \"kind\", \"Deployment\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"Job\", owner_name=~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.+)-[0-9]+\"), \"kind\", \"CronJob\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod) (kube_pod_owner{owner_kind=\"<none>\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"pod\", \"(.*)\"), \"kind\", \"Pod\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_kind, owner_name) (kube_pod_owner{owner_kind!~\"ReplicaSet|<none>\", owner_name!~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)\"), \"kind\", \"$1\", \"owner_kind\", \"(.*)\")) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=\"$node\", node!=\"\"}) and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))",
+          "refId": "D",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (namespace, kind, workload, node) (sum by (namespace, pod) (container_memory_working_set_bytes{container!=\"\", container!=\"POD\"}) * on (namespace, pod) group_left (kind, workload, node) (max by (namespace, pod, kind, workload) (label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"ReplicaSet\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\"), \"kind\", \"Deployment\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"Job\", owner_name=~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.+)-[0-9]+\"), \"kind\", \"CronJob\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod) (kube_pod_owner{owner_kind=\"<none>\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"pod\", \"(.*)\"), \"kind\", \"Pod\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_kind, owner_name) (kube_pod_owner{owner_kind!~\"ReplicaSet|<none>\", owner_name!~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)\"), \"kind\", \"$1\", \"owner_kind\", \"(.*)\")) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=\"$node\", node!=\"\"}) and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))",
+          "refId": "E",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "namespace",
+                "workload",
+                "kind",
+                "Value #A",
+                "Value #B",
+                "Value #C",
+                "Value #D",
+                "Value #E"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "namespace": 0,
+              "workload": 1,
+              "kind": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "Value #C": 5,
+              "Value #D": 6,
+              "Value #E": 7
+            },
+            "renameByName": {
+              "namespace": "Namespace",
+              "workload": "Workload",
+              "kind": "Kind",
+              "node": "Node",
+              "Value #A": "Pods",
+              "Value #B": "CPU req",
+              "Value #C": "CPU used",
+              "Value #D": "Mem req",
+              "Value #E": "Mem used"
+            },
+            "excludeByName": {}
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Namespace"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Kind"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Node"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 140
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pods"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 60
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU req"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix:m"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 85
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix:m"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 85
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Mem req"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Mem used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "Mem req",
+            "desc": true
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "repeat": "node",
+      "repeatDirection": "h",
+      "maxPerRow": 2,
+      "id": 4
+    },
+    {
+      "type": "row",
+      "title": "All workloads",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 5
+    },
+    {
+      "type": "table",
+      "title": "Workloads by node",
+      "description": "Running and pending pods grouped by what owns them. A Deployment's ReplicaSets are folded into the Deployment, CronJob runs into the CronJob; a Cluster is a CloudNativePG Postgres. Requests are what the scheduler reserved on the node; used is the last five minutes. Most pods here are pinned with a nodeSelector (see the root README, \"Storage\"), which no metric exposes: this shows where pods run, not where they are allowed to. Every column is sortable and filterable.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count by (namespace, kind, workload, node) ((max by (namespace, pod, kind, workload) (label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"ReplicaSet\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\"), \"kind\", \"Deployment\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"Job\", owner_name=~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.+)-[0-9]+\"), \"kind\", \"CronJob\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod) (kube_pod_owner{owner_kind=\"<none>\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"pod\", \"(.*)\"), \"kind\", \"Pod\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_kind, owner_name) (kube_pod_owner{owner_kind!~\"ReplicaSet|<none>\", owner_name!~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)\"), \"kind\", \"$1\", \"owner_kind\", \"(.*)\")) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\", node!=\"\"}) and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1000 * sum by (namespace, kind, workload, node) (sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\"}) * on (namespace, pod) group_left (kind, workload, node) (max by (namespace, pod, kind, workload) (label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"ReplicaSet\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\"), \"kind\", \"Deployment\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"Job\", owner_name=~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.+)-[0-9]+\"), \"kind\", \"CronJob\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod) (kube_pod_owner{owner_kind=\"<none>\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"pod\", \"(.*)\"), \"kind\", \"Pod\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_kind, owner_name) (kube_pod_owner{owner_kind!~\"ReplicaSet|<none>\", owner_name!~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)\"), \"kind\", \"$1\", \"owner_kind\", \"(.*)\")) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\", node!=\"\"}) and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1000 * sum by (namespace, kind, workload, node) (sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{container!=\"\", container!=\"POD\"}[5m])) * on (namespace, pod) group_left (kind, workload, node) (max by (namespace, pod, kind, workload) (label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"ReplicaSet\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\"), \"kind\", \"Deployment\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"Job\", owner_name=~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.+)-[0-9]+\"), \"kind\", \"CronJob\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod) (kube_pod_owner{owner_kind=\"<none>\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"pod\", \"(.*)\"), \"kind\", \"Pod\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_kind, owner_name) (kube_pod_owner{owner_kind!~\"ReplicaSet|<none>\", owner_name!~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)\"), \"kind\", \"$1\", \"owner_kind\", \"(.*)\")) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\", node!=\"\"}) and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (namespace, kind, workload, node) (sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\"}) * on (namespace, pod) group_left (kind, workload, node) (max by (namespace, pod, kind, workload) (label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"ReplicaSet\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\"), \"kind\", \"Deployment\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"Job\", owner_name=~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.+)-[0-9]+\"), \"kind\", \"CronJob\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod) (kube_pod_owner{owner_kind=\"<none>\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"pod\", \"(.*)\"), \"kind\", \"Pod\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_kind, owner_name) (kube_pod_owner{owner_kind!~\"ReplicaSet|<none>\", owner_name!~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)\"), \"kind\", \"$1\", \"owner_kind\", \"(.*)\")) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\", node!=\"\"}) and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))",
+          "refId": "D",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (namespace, kind, workload, node) (sum by (namespace, pod) (container_memory_working_set_bytes{container!=\"\", container!=\"POD\"}) * on (namespace, pod) group_left (kind, workload, node) (max by (namespace, pod, kind, workload) (label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"ReplicaSet\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\"), \"kind\", \"Deployment\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_name) (kube_pod_owner{owner_kind=\"Job\", owner_name=~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.+)-[0-9]+\"), \"kind\", \"CronJob\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod) (kube_pod_owner{owner_kind=\"<none>\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"pod\", \"(.*)\"), \"kind\", \"Pod\", \"\", \"\") or label_replace(label_replace(max by (namespace, pod, owner_kind, owner_name) (kube_pod_owner{owner_kind!~\"ReplicaSet|<none>\", owner_name!~\".+-[0-9]{8,}\", namespace=~\"$namespace\"}), \"workload\", \"$1\", \"owner_name\", \"(.*)\"), \"kind\", \"$1\", \"owner_kind\", \"(.*)\")) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\", node!=\"\"}) and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))",
+          "refId": "E",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": [
+                "namespace",
+                "workload",
+                "kind",
+                "node",
+                "Value #A",
+                "Value #B",
+                "Value #C",
+                "Value #D",
+                "Value #E"
+              ]
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "namespace": 0,
+              "workload": 1,
+              "kind": 2,
+              "node": 3,
+              "Value #A": 4,
+              "Value #B": 5,
+              "Value #C": 6,
+              "Value #D": 7,
+              "Value #E": 8
+            },
+            "renameByName": {
+              "namespace": "Namespace",
+              "workload": "Workload",
+              "kind": "Kind",
+              "node": "Node",
+              "Value #A": "Pods",
+              "Value #B": "CPU req",
+              "Value #C": "CPU used",
+              "Value #D": "Mem req",
+              "Value #E": "Mem used"
+            },
+            "excludeByName": {}
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Namespace"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Kind"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Node"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 140
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pods"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 60
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU req"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix:m"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 85
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "suffix:m"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 85
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Mem req"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Mem used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "Mem req",
+            "desc": true
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 6
+    },
+    {
+      "type": "row",
+      "title": "Over time",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 42
+      },
+      "id": 7
+    },
+    {
+      "type": "timeseries",
+      "title": "Pods per node",
+      "description": "Running and pending pods on each node. A step down on one node and up on the other is pods moving.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count by (node) ((max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\", node!=\"\"}))",
+          "refId": "A",
+          "legendFormat": "{{node}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 43
+      },
+      "id": 8
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory requested per node",
+      "description": "Requests against allocatable (dashed). Requested reaching allocatable is when a node stops taking pods.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (node) (kube_pod_container_resource_requests{resource=\"memory\", node=~\"$node\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "refId": "A",
+          "legendFormat": "{{node}} requested"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node) (kube_node_status_allocatable{resource=\"memory\", node=~\"$node\"})",
+          "refId": "B",
+          "legendFormat": "{{node}} allocatable"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* allocatable"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 43
+      },
+      "id": 9
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU requested per node",
+      "description": "Requests against allocatable (dashed), in millicores.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1000 * sum by (node) (kube_pod_container_resource_requests{resource=\"cpu\", node=~\"$node\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "refId": "A",
+          "legendFormat": "{{node}} requested"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1000 * max by (node) (kube_node_status_allocatable{resource=\"cpu\", node=~\"$node\"})",
+          "refId": "B",
+          "legendFormat": "{{node}} allocatable"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix:m",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* allocatable"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 43
+      },
+      "id": 10
+    }
+  ]
+}

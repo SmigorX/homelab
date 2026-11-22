@@ -7,8 +7,8 @@ metadata:
   name: samba
   namespace: samba
   annotations:
-    metallb.universe.tf/address-pool: ingress
-    metallb.universe.tf/loadBalancerIPs: 192.168.1.12
+    metallb.io/address-pool: ingress
+    metallb.io/loadBalancerIPs: 192.168.1.12
 spec:
   type: LoadBalancer
 

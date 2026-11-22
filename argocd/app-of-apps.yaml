@@ -22,7 +22,20 @@ spec:
     server: https://kubernetes.default.svc
     namespace: argocd
 
+  # Argo CD adds pre-delete-finalizer.argocd.argoproj.io (and .../cleanup) to
+  # any Application whose chart has a PreDelete hook - vault-secrets-operator's
+  # does - so its finalizers no longer match Git and this app reads OutOfSync.
+  # Ignore exactly those two, and keep sync from stripping them, which would
+  # only start a tug-of-war with the controller that re-adds them.
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: Application
+      jqPathExpressions:
+        - .metadata.finalizers[]? | select(startswith("pre-delete-finalizer.argocd.argoproj.io"))
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true

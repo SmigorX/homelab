@@ -22,6 +22,7 @@ configMapGenerator:
       - dashboards/node.json
       - dashboards/health.json
       - dashboards/ingress.json
+      - dashboards/placement.json
 
 generatorOptions:
   # A stable name: the sidecar reacts to the content changing, not to a new

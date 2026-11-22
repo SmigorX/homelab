@@ -1,7 +1,7 @@
 {
   "uid": "homelab-resources",
   "title": "Resources",
-  "description": "Requests, limits and real usage: whether the next pod will fit.",
+  "description": "Requests, limits and real usage, per node: whether the next pod will fit.",
   "tags": [
     "homelab"
   ],
@@ -16,6 +16,34 @@
   "timezone": "browser",
   "templating": {
     "list": [
+      {
+        "type": "query",
+        "name": "node",
+        "label": "Node",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "definition": "label_values(kube_node_info, node)",
+        "query": {
+          "query": "label_values(kube_node_info, node)",
+          "refId": "node"
+        },
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
       {
         "type": "query",
         "name": "namespace",
@@ -66,7 +94,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "Node budget: the scheduler places pods by requests, not by use",
+      "title": "Node budget on $node: the scheduler places pods by requests, not by use",
       "collapsed": false,
       "panels": [],
       "id": 1,
@@ -75,7 +103,8 @@
         "w": 24,
         "x": 0,
         "y": 0
-      }
+      },
+      "repeat": "node"
     },
     {
       "type": "stat",
@@ -91,7 +120,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "100 * sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))) / sum(kube_node_status_allocatable{resource=\"memory\"})",
+          "expr": "100 * sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))) / sum(kube_node_status_allocatable{node=\"$node\", resource=\"memory\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -161,7 +190,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(kube_node_status_allocatable{resource=\"memory\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))",
+          "expr": "sum(kube_node_status_allocatable{node=\"$node\", resource=\"memory\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))",
           "refId": "A",
           "instant": true,
           "range": false
@@ -230,7 +259,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "(sum(kube_node_status_allocatable{resource=\"memory\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))) - max(label_replace(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) * on (namespace, pod) group_left (owner_name) kube_pod_owner{owner_kind=\"ReplicaSet\"}, \"deployment\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\") and on (namespace, deployment) (kube_deployment_spec_strategy_rollingupdate_max_surge > 0))",
+          "expr": "(sum(kube_node_status_allocatable{node=\"$node\", resource=\"memory\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))) - (max(label_replace(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) * on (namespace, pod) group_left (owner_name) kube_pod_owner{owner_kind=\"ReplicaSet\"}, \"deployment\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\") and on (namespace, deployment) (kube_deployment_spec_strategy_rollingupdate_max_surge > 0)) or vector(0))",
           "refId": "A",
           "instant": true,
           "range": false
@@ -299,7 +328,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "100 * (1 - sum(node_memory_MemAvailable_bytes) / sum(node_memory_MemTotal_bytes))",
+          "expr": "100 * (1 - sum(node_memory_MemAvailable_bytes * on (instance) group_left () node_uname_info{nodename=\"$node\"}) / sum(node_memory_MemTotal_bytes * on (instance) group_left () node_uname_info{nodename=\"$node\"}))",
           "refId": "A",
           "instant": true,
           "range": false
@@ -357,8 +386,8 @@
     },
     {
       "type": "stat",
-      "title": "Unschedulable pods",
-      "description": "Pods the scheduler has given up placing for now, almost always for lack of requestable memory or CPU. The Health dashboard names them.",
+      "title": "Unschedulable pods (cluster)",
+      "description": "Pods the scheduler has given up placing for now, almost always for lack of requestable memory or CPU. The Health dashboard names them. Cluster-wide, so every node's row shows the same number: a pod that fits nowhere has no node yet.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -434,7 +463,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "100 * sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))) / sum(kube_node_status_allocatable{resource=\"cpu\"})",
+          "expr": "100 * sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))) / sum(kube_node_status_allocatable{node=\"$node\", resource=\"cpu\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -504,7 +533,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "1000 * (sum(kube_node_status_allocatable{resource=\"cpu\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))))",
+          "expr": "1000 * (sum(kube_node_status_allocatable{node=\"$node\", resource=\"cpu\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)))))",
           "refId": "A",
           "instant": true,
           "range": false
@@ -574,7 +603,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "1000 * ((sum(kube_node_status_allocatable{resource=\"cpu\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))) - max(label_replace(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) * on (namespace, pod) group_left (owner_name) kube_pod_owner{owner_kind=\"ReplicaSet\"}, \"deployment\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\") and on (namespace, deployment) (kube_deployment_spec_strategy_rollingupdate_max_surge > 0)))",
+          "expr": "1000 * ((sum(kube_node_status_allocatable{node=\"$node\", resource=\"cpu\"}) - sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))) - (max(label_replace(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) * on (namespace, pod) group_left (owner_name) kube_pod_owner{owner_kind=\"ReplicaSet\"}, \"deployment\", \"$1\", \"owner_name\", \"(.*)-[a-z0-9]+\") and on (namespace, deployment) (kube_deployment_spec_strategy_rollingupdate_max_surge > 0)) or vector(0)))",
           "refId": "A",
           "instant": true,
           "range": false
@@ -644,7 +673,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "100 * (1 - sum(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) / count(node_cpu_seconds_total{mode=\"idle\"}))",
+          "expr": "100 * (1 - sum(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]) * on (instance) group_left () node_uname_info{nodename=\"$node\"}) / count(node_cpu_seconds_total{mode=\"idle\"} * on (instance) group_left () node_uname_info{nodename=\"$node\"}))",
           "refId": "A",
           "instant": true,
           "range": false
@@ -714,7 +743,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "count((max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1) and on (namespace, pod) kube_pod_info{node!=\"\"})",
+          "expr": "count((max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1) and on (namespace, pod) kube_pod_info{node=\"$node\"})",
           "refId": "A",
           "instant": true,
           "range": false
@@ -783,7 +812,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(kube_node_status_allocatable{resource=\"memory\"})",
+          "expr": "sum(kube_node_status_allocatable{node=\"$node\", resource=\"memory\"})",
           "refId": "A",
           "legendFormat": "Allocatable"
         },
@@ -792,7 +821,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))",
+          "expr": "sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"memory\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))",
           "refId": "B",
           "legendFormat": "Requested"
         },
@@ -801,7 +830,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes)",
+          "expr": "sum((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) * on (instance) group_left () node_uname_info{nodename=\"$node\"})",
           "refId": "C",
           "legendFormat": "Used (host)"
         }
@@ -925,7 +954,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(kube_node_status_allocatable{resource=\"cpu\"})",
+          "expr": "sum(kube_node_status_allocatable{node=\"$node\", resource=\"cpu\"})",
           "refId": "A",
           "legendFormat": "Allocatable"
         },
@@ -934,7 +963,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node!=\"\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))",
+          "expr": "sum(((sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) + ((max by (namespace, pod) (kube_pod_init_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1)) - sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))) > 0)) or sum by (namespace, pod) (kube_pod_container_resource_requests{resource=\"cpu\", node=\"$node\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))))",
           "refId": "B",
           "legendFormat": "Requested"
         },
@@ -943,7 +972,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "count(node_cpu_seconds_total{mode=\"idle\"}) - sum(rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval]))",
+          "expr": "count(node_cpu_seconds_total{mode=\"idle\"} * on (instance) group_left () node_uname_info{nodename=\"$node\"}) - sum(rate(node_cpu_seconds_total{mode=\"idle\"}[$__rate_interval]) * on (instance) group_left () node_uname_info{nodename=\"$node\"})",
           "refId": "C",
           "legendFormat": "Used (host)"
         }
@@ -1081,7 +1110,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (namespace) (kube_pod_container_resource_requests{resource=\"memory\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "expr": "sum by (namespace) (kube_pod_container_resource_requests{node=~\"$node\", resource=\"memory\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
           "refId": "A",
           "instant": true,
           "range": false,
@@ -1092,7 +1121,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (namespace) (container_memory_working_set_bytes{container!=\"\", container!=\"POD\", namespace=~\"$namespace\"})",
+          "expr": "sum by (namespace) (container_memory_working_set_bytes{node=~\"$node\", container!=\"\", container!=\"POD\", namespace=~\"$namespace\"})",
           "refId": "B",
           "instant": true,
           "range": false,
@@ -1229,7 +1258,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (namespace) (kube_pod_container_resource_requests{resource=\"cpu\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "expr": "sum by (namespace) (kube_pod_container_resource_requests{node=~\"$node\", resource=\"cpu\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
           "refId": "A",
           "instant": true,
           "range": false,
@@ -1240,7 +1269,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (namespace) (rate(container_cpu_usage_seconds_total{container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}[5m]))",
+          "expr": "sum by (namespace) (rate(container_cpu_usage_seconds_total{node=~\"$node\", container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}[5m]))",
           "refId": "B",
           "instant": true,
           "range": false,
@@ -1390,7 +1419,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "1000 * sum by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}[5m]))",
+          "expr": "1000 * sum by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{node=~\"$node\", container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}[5m]))",
           "refId": "A",
           "instant": true,
           "range": false,
@@ -1401,7 +1430,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "1000 * sum by (namespace, pod, container) (kube_pod_container_resource_requests{resource=\"cpu\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "expr": "1000 * sum by (namespace, pod, container) (kube_pod_container_resource_requests{node=~\"$node\", resource=\"cpu\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
           "refId": "B",
           "instant": true,
           "range": false,
@@ -1412,7 +1441,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "100 * sum by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}[5m])) / sum by (namespace, pod, container) (kube_pod_container_resource_requests{resource=\"cpu\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "expr": "100 * sum by (namespace, pod, container) (rate(container_cpu_usage_seconds_total{node=~\"$node\", container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}[5m])) / sum by (namespace, pod, container) (kube_pod_container_resource_requests{node=~\"$node\", resource=\"cpu\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
           "refId": "C",
           "instant": true,
           "range": false,
@@ -1423,7 +1452,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (namespace, pod, container) (container_memory_working_set_bytes{container!=\"\", container!=\"POD\", namespace=~\"$namespace\"})",
+          "expr": "sum by (namespace, pod, container) (container_memory_working_set_bytes{node=~\"$node\", container!=\"\", container!=\"POD\", namespace=~\"$namespace\"})",
           "refId": "D",
           "instant": true,
           "range": false,
@@ -1434,7 +1463,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (namespace, pod, container) (kube_pod_container_resource_requests{resource=\"memory\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "expr": "sum by (namespace, pod, container) (kube_pod_container_resource_requests{node=~\"$node\", resource=\"memory\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
           "refId": "E",
           "instant": true,
           "range": false,
@@ -1445,7 +1474,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (namespace, pod, container) (kube_pod_container_resource_limits{resource=\"memory\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "expr": "sum by (namespace, pod, container) (kube_pod_container_resource_limits{node=~\"$node\", resource=\"memory\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
           "refId": "F",
           "instant": true,
           "range": false,
@@ -1456,7 +1485,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "100 * sum by (namespace, pod, container) (container_memory_working_set_bytes{container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}) / sum by (namespace, pod, container) (kube_pod_container_resource_requests{resource=\"memory\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "expr": "100 * sum by (namespace, pod, container) (container_memory_working_set_bytes{node=~\"$node\", container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}) / sum by (namespace, pod, container) (kube_pod_container_resource_requests{node=~\"$node\", resource=\"memory\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
           "refId": "G",
           "instant": true,
           "range": false,
@@ -1467,7 +1496,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "100 * sum by (namespace, pod, container) (container_memory_working_set_bytes{container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}) / sum by (namespace, pod, container) (kube_pod_container_resource_limits{resource=\"memory\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
+          "expr": "100 * sum by (namespace, pod, container) (container_memory_working_set_bytes{node=~\"$node\", container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}) / sum by (namespace, pod, container) (kube_pod_container_resource_limits{node=~\"$node\", resource=\"memory\", namespace=~\"$namespace\"} and on (namespace, pod) (max by (namespace, pod) (kube_pod_status_phase{phase=~\"Pending|Running\"}) == 1))",
           "refId": "H",
           "instant": true,
           "range": false,
@@ -1861,7 +1890,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (namespace) (container_memory_working_set_bytes{container!=\"\", container!=\"POD\", namespace=~\"$namespace\"})",
+          "expr": "sum by (namespace) (container_memory_working_set_bytes{node=~\"$node\", container!=\"\", container!=\"POD\", namespace=~\"$namespace\"})",
           "refId": "A",
           "legendFormat": "{{namespace}}"
         }
@@ -1926,7 +1955,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (namespace) (rate(container_cpu_usage_seconds_total{container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}[$__rate_interval]))",
+          "expr": "sum by (namespace) (rate(container_cpu_usage_seconds_total{node=~\"$node\", container!=\"\", container!=\"POD\", namespace=~\"$namespace\"}[$__rate_interval]))",
           "refId": "A",
           "legendFormat": "{{namespace}}"
         }

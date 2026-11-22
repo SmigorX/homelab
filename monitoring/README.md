@@ -170,14 +170,15 @@ same trap `forgejo/README.md` describes.
 The chart's ~40 stock dashboards are off (`defaultDashboards.enabled: false`).
 Most covered things this cluster does not have (Windows, AIX and Darwin nodes,
 multiple clusters, the components k3s does not split out), and the rest
-answered general questions rather than this cluster's. Four hand-written ones
+answered general questions rather than this cluster's. Five hand-written ones
 replace them, in Grafana's *Homelab* folder:
 
 | Dashboard | Answers |
 | --- | --- |
-| **Health** (the home page) | What is broken: firing alerts, pods not ready and why, restarts and their exit reasons, OOM kills, Argo CD apps not Synced/Healthy, Vault errors from VSO, k3s certificate expiry |
-| **Resources** | Will the next pod fit: requests against allocatable, rolling-update headroom, requested-vs-used per namespace, and every container's usage as a share of its request and limit |
-| **Node** | The host: CPU, memory, swap, PSI stalls, temperatures, RAID, filesystems, disk and network |
+| **Health** (the home page) | What is broken: firing alerts, nodes not ready or cordoned, pods not ready and why, restarts and their exit reasons, OOM kills, Argo CD apps not Synced/Healthy, Vault errors from VSO, k3s certificate expiry |
+| **Resources** | Will the next pod fit: requests against allocatable and rolling-update headroom, repeated per node because the scheduler budgets each node separately; requested-vs-used per namespace, and every container's usage as a share of its request and limit |
+| **Node** | One host at a time, picked with the *Node* selector: CPU, memory, swap, PSI stalls, temperatures, RAID, filesystems, disk and network |
+| **Placement** | Which workloads run on which node: each node's state, requests and use, its workloads side by side with the other node's, one sortable table of every workload, and pods and requests per node over time |
 | **Ingress** | Traefik: traffic, status codes, response times and bandwidth per service, and every TLS certificate's expiry |
 
 They are plain JSON in [manifests/dashboards/](manifests/dashboards/), which
@@ -194,6 +195,14 @@ use to link to each other. Health is the home page by its file name,
 
 All queries target the datasource UID `VictoriaMetrics` directly. That is the
 UID the chart provisions, so the dashboards need no datasource variable.
+
+node-exporter series carry only `instance` (`192.168.1.10:9100`), never the
+Kubernetes node name, while kube-state-metrics and cAdvisor series carry `node`.
+The two are joined through `node_uname_info`, whose `nodename` is the host name
+and so the node name here: *Node* resolves a hidden `$instance` from it, and
+*Resources* and *Placement* multiply by
+`on (instance) group_left (nodename) node_uname_info{nodename=~"$node"}`. A
+node-exporter query without one of those sums every host.
 
 ## Logs
 
