@@ -105,8 +105,9 @@ and OnlyOffice (bursts to ~1 core). Their requests cover idle and their limits
 cover the spike, which is the shape this pass aimed for everywhere else.
 
 Not in Git, so not changed: k3s's own CoreDNS, metrics-server (no memory
-limit) and Traefik (no requests at all; see `traefik/manifests/traefik-config.yaml`
-for why its HelmChartConfig is not a safe place to add them yet), and the
+limit) and Traefik (no requests yet; its HelmChartConfig in
+`traefik/manifests/traefik-config.yaml` is now the only source, so that is
+where they go), and the
 VictoriaMetrics operator's `config-reloader` sidecars, which have no limit.
 
 The CloudNativePG databases were looked at and left alone: they idle at ~10m

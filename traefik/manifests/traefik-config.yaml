@@ -5,20 +5,25 @@
 # HelmChartConfig with the same name ("traefik") in the same namespace.
 # k3s merges these values into its own Helm release on the next reconcile.
 #
-# Problem solved:
-#   Traefik's default readTimeout / writeTimeout (60 s in some builds, 0 in
-#   others) and idleTimeout (180 s) are too short for large Immich video
-#   uploads. The connection gets reset mid-transfer.
+# This is the only source for that object. It used to have a twin: a k3s addon,
+# /var/lib/rancher/k3s/server/manifests/traefk-config.yaml (sic) on the host,
+# wrote the same HelmChartConfig with only the MetalLB annotation, and every
+# time either side applied it the other's settings vanished - the Traefik
+# release reached revision 28 that way, and whenever this file won, the Service
+# lost its address request. Both settings now live here, and the host file is
+# gone. Do not recreate it: anything under that directory is applied on every
+# k3s start and overwrites this object.
 #
-# What this does:
-#   Sets respondingTimeouts on the "websecure" entrypoint to 10 minutes,
-#   which is enough for multi-GB uploads over a home network.
+# Two settings:
 #
-# The k3s addon `traefk-config` (sic), from
-# /var/lib/rancher/k3s/server/manifests/traefk-config.yaml on the host, writes
-# this same object. The two do not agree - that file carries the MetalLB
-# annotation pinning Traefik to 192.168.1.11, this one does not - and whichever
-# applied last wins until the other reconciles again.
+# 1. respondingTimeouts on the "websecure" entrypoint, 10 minutes. Traefik's
+#    defaults (60 s in some builds, 0 in others, and a 180 s idleTimeout) reset
+#    large Immich video uploads mid-transfer.
+#
+# 2. The Service's MetalLB address. The ingress pool has autoAssign: false, so
+#    without metallb.io/loadBalancerIPs a recreated Service gets no address at
+#    all, and every HTTP route in the cluster goes with it. 192.168.1.11 is
+#    what the wildcard DNS record points at.
 #
 # Docs:
 #   https://docs.k3s.io/helm#customizing-packaged-components-with-helmchartconfig
@@ -37,3 +42,7 @@ spec:
             readTimeout: 600
             writeTimeout: 600
             idleTimeout: 180
+    service:
+      annotations:
+        metallb.io/address-pool: ingress
+        metallb.io/loadBalancerIPs: "192.168.1.11"
