@@ -13,6 +13,7 @@ is the reference.
 | Alertmanager | Groups alerts, posts to Discord | `alertmanager.k8s.internal.smigorx.eu`, Authentik |
 | Grafana | Dashboards | `grafana.k8s.internal.smigorx.eu`, Authentik |
 | kube-state-metrics, node-exporter | Kubernetes object and host metrics | — |
+| smartctl-exporter | Every disk's SMART data, for the disk alerts | — |
 | VLSingle | Stores logs, 30 days | Grafana, *Explore → VictoriaLogs* |
 | VLAgent | Ships pod logs and the host's syslog to VLSingle | — |
 | VMAuth (`vmks-internal`) | Routes VMAlert's queries to VMSingle or VLSingle | in-cluster only |
@@ -150,6 +151,15 @@ know about:
   Application's sync and health status. The controller's NetworkPolicy already
   admits that port from any namespace.
 
+Not in that file, because it is a workload of ours rather than a scrape of
+someone else's: **smartctl-exporter**,
+[manifests/smartctl-exporter.yaml](manifests/smartctl-exporter.yaml). A
+privileged DaemonSet on every node, running `smartctl` against each disk once a
+minute, with a `VMPodScrape` that labels its series with the `node`. It finds
+disks on its own and rescans every 10 minutes, so a new disk needs no change.
+It started at 5m / 32Mi, limit 128Mi, as a guess, before there was usage to
+measure.
+
 The `metrics` switches in `authentik/values.yaml`, `forgejo/values.yaml` and
 `cert-manager/values.yaml` are off. Turning one on needs a scrape object here
 to go with it.
@@ -216,7 +226,7 @@ replace them, in Grafana's *Homelab* folder:
 | --- | --- |
 | **Health** (the home page) | What is broken: firing alerts, nodes not ready or cordoned, pods not ready and why, restarts and their exit reasons, OOM kills, Argo CD apps not Synced/Healthy, Vault errors from VSO, k3s certificate expiry |
 | **Resources** | Will the next pod fit: requests against allocatable and rolling-update headroom, repeated per node because the scheduler budgets each node separately; requested-vs-used per namespace, and every container's usage as a share of its request and limit |
-| **Node** | One host at a time, picked with the *Node* selector: CPU, memory, swap, PSI stalls, temperatures, RAID, filesystems, disk and network |
+| **Node** | One host at a time, picked with the *Node* selector: CPU, memory, swap, PSI stalls, temperatures, RAID, filesystems, every disk's SMART health, disk and network |
 | **Placement** | Which workloads run on which node: each node's state, requests and use, its workloads side by side with the other node's, one sortable table of every workload, and pods and requests per node over time |
 | **Ingress** | Traefik: traffic, status codes, response times and bandwidth per service, and every TLS certificate's expiry |
 
@@ -297,6 +307,21 @@ Rules of this cluster's own, beyond the chart's defaults, are in
   sealed, which nothing else reports, since the pod stays `1/1` by design (see
   `vault/README.md`). Every `vault-0` restart triggers it until Vault is
   unsealed.
+- **Disks**, from smartctl-exporter:
+  - critical: `DiskSmartFailing` (the drive's own SMART verdict),
+    `DiskSmartAttributeFailing` (an attribute at its failure threshold),
+    `NvmeCriticalWarning`;
+  - warning: `DiskBadSectors` (any pending sector, or reallocated or
+    uncorrectable sectors growing), `DiskErrorLogGrowing`, `DiskLinkErrors`
+    (SATA CRC errors growing: a cable or port), `NvmeMediaErrors`,
+    `SsdWornOut` (90% of rated endurance), `DiskTooHot` (HDD over 50°C, SSD
+    over 70°C), and `DiskSmartUnreadable` (smartctl cannot open a disk, so
+    the rest are blind to it).
+
+  Counters that were already non-zero when this went in alert on growth over
+  a day rather than on their value; rules.yaml lists those baselines. The
+  failure of a disk in md0 is also covered by the chart's `NodeRAIDDegraded`
+  and `NodeRAIDDiskFailure`, which see the array rather than the disk.
 
 The webhook URL is read from a file mounted from the `alertmanager-discord`
 Secret (`webhook_url_file`), so it never appears in the Alertmanager config

@@ -1,0 +1,77 @@
+# SMART data from every disk in the cluster, for the disk alerts in rules.yaml
+# and the SMART table on the Node dashboard. node-exporter only sees what the
+# kernel sees (throughput, md state); a disk that is quietly growing bad
+# sectors looks perfectly healthy to it until md kicks it out of the mirror.
+#
+# Plain manifests rather than the prometheus-smartctl-exporter chart: it is one
+# DaemonSet and a scrape, and the chart would be a fourth source on the
+# monitoring Application for that.
+#
+# The exporter finds disks itself (smartctl --scan, again every 10 minutes), so
+# the new 1TB disk shows up without a change here. It polls each disk once a
+# minute, skipping any that are spun down rather than waking them.
+#
+# Privileged and root: smartctl sends ATA and NVMe passthrough commands to the
+# block devices, which needs CAP_SYS_RAWIO and CAP_SYS_ADMIN, and the image
+# defaults to `nobody`. A privileged container also sees the host's /dev
+# without a hostPath mount, and runs as spc_t, so SELinux does not need a
+# label for it.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: smartctl-exporter
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: smartctl-exporter
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: smartctl-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: smartctl-exporter
+    spec:
+      # Every node, like node-exporter: a disk is worth watching wherever it is.
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: smartctl-exporter
+          image: quay.io/prometheuscommunity/smartctl-exporter:v0.15.0
+          ports:
+            - name: metrics
+              containerPort: 9633
+          securityContext:
+            privileged: true
+            runAsUser: 0
+            runAsGroup: 0
+          readinessProbe:
+            httpGet:
+              path: /
+              port: metrics
+          # A guess until there is usage data: a small Go binary that forks
+          # smartctl once a minute per disk.
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+# VMPodScrape rather than a Service and a VMServiceScrape: nothing else talks
+# to the exporter. The `node` label is what the Node dashboard and the alerts
+# name the machine by; the pod's IP alone would not say which one it is.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: smartctl-exporter
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: smartctl-exporter
+  podMetricsEndpoints:
+    - port: metrics
+      relabelConfigs:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
