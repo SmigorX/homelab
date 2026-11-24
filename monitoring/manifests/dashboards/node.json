@@ -1598,7 +1598,7 @@
     {
       "type": "table",
       "title": "Disks (SMART)",
-      "description": "Every disk smartctl-exporter finds on this node. Reallocated, Pending and Error log are ATA only, Wear is NVMe only (share of rated write endurance). The counters that were already non-zero when this went in (sda's 1,004 error-log entries from one bad sector at hour 11,607, CRC errors on sda and sdb) are history; the disk alerts in rules.yaml fire on growth, not on the value. Seagate's raw read/seek error rates are deliberately left out: they are encoded operation counts, not errors.",
+      "description": "Every disk smartctl-exporter finds on this node. Reallocated, Pending and Error log are ATA only, Wear is NVMe only (share of rated write endurance). Error log is the summary SMART error log; sda's 1,004 entries from one bad sector at hour 11,607 are in the extended log, which the exporter does not read. CRC errors on sda and sdb predate this table; the disk alerts in rules.yaml fire on growth, not on the value. Self-test results are not here: the exporter does not read the self-test log, so DiskSelfTestFailed alerts from smartd's logs instead. Seagate's raw read/seek error rates are left out on purpose: they are encoded operation counts, not errors.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"

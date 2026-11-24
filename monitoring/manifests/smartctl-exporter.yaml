@@ -49,14 +49,55 @@ spec:
             httpGet:
               path: /
               port: metrics
-          # A guess until there is usage data: a small Go binary that forks
-          # smartctl once a minute per disk.
+          # Measured over its first day: ~20Mi and 1-5m CPU.
           resources:
             requests:
               cpu: 5m
               memory: 32Mi
             limits:
               memory: 128Mi
+        # SMART self-tests. A drive only reads its whole surface when told to;
+        # until this ran, no disk here had ever done a self-test, so a sector
+        # that went bad in a region nothing reads would go unnoticed until md
+        # needed it during a resync. smartd only starts the tests: the drive
+        # runs them in firmware, yielding to normal I/O, and logs the result,
+        # which the exporter reads (DiskSelfTestFailed in rules.yaml).
+        #
+        # Same image (it ships smartd), same privileges. The config is written
+        # inline so that changing it changes the pod template and rolls the
+        # DaemonSet; a ConfigMap would not. --debug is what sends smartd's
+        # messages to stdout, so to VictoriaLogs, instead of a syslog socket
+        # the container does not have; at this config it is three lines per
+        # disk at startup and one per disk every 30 minutes.
+        #
+        # Schedule, in UTC (the container has no timezone; CET is +1):
+        #   short  every day at 02:00, a minute or two per disk
+        #   long   on the 1st and 15th at 22:00, staggered by 12 hours per
+        #          disk in scan order: sda the 1st at 22:00 (~2h), sdb the 2nd
+        #          at 10:00 (minutes), sdc the 2nd at 22:00 (~8h on an idle
+        #          disk, longer under seeding). The two halves of md0 never
+        #          test at once, and the long ones run overnight.
+        # -n standby,q skips a disk that is spun down instead of waking it.
+        # -H, -l selftest and -l error only log; nothing here sends mail.
+        - name: smartd
+          image: quay.io/prometheuscommunity/smartctl-exporter:v0.15.0
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cat > /etc/smartd.conf <<'EOF'
+              DEVICESCAN -H -l selftest -l error -n standby,q -s (S/../.././02|L/../(01|15)/./22:012)
+              EOF
+              exec /usr/sbin/smartd --debug --quit=never --configfile=/etc/smartd.conf
+          securityContext:
+            privileged: true
+            runAsUser: 0
+            runAsGroup: 0
+          resources:
+            requests:
+              cpu: 1m
+              memory: 8Mi
+            limits:
+              memory: 64Mi
 ---
 # VMPodScrape rather than a Service and a VMServiceScrape: nothing else talks
 # to the exporter. The `node` label is what the Node dashboard and the alerts

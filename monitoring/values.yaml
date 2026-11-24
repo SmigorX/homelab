@@ -110,6 +110,21 @@ defaultRules:
   groups:
     etcd:
       enabled: false
+  # Both ask whether the cluster's requests would still fit with its largest
+  # node gone. With two nodes, and everything stateful pinned to fedora-server
+  # (its storage lives there), the answer is no by construction, so
+  # KubeMemoryOvercommit fired around the clock and kept reposting to Discord -
+  # which trains you to ignore the channel the disk alerts post to. The CPU one
+  # is off for the same reason, before it starts. The question they ask per
+  # node, will the next pod fit, is the Resources dashboard's budget row.
+  #
+  # The chart does not render these rules itself: vmks-sync-job fetches them
+  # and creates the VMRules, honouring `enabled: false` per rule.
+  rules:
+    KubeMemoryOvercommit:
+      enabled: false
+    KubeCPUOvercommit:
+      enabled: false
 
 # The same shared registry means the kubelet's /metrics is a copy of the API
 # server's: about 51k series, of which about 3k are the kubelet's own. Scraped

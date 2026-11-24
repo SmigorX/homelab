@@ -157,8 +157,21 @@ someone else's: **smartctl-exporter**,
 privileged DaemonSet on every node, running `smartctl` against each disk once a
 minute, with a `VMPodScrape` that labels its series with the `node`. It finds
 disks on its own and rescans every 10 minutes, so a new disk needs no change.
-It started at 5m / 32Mi, limit 128Mi, as a guess, before there was usage to
-measure.
+It uses ~20Mi and 1-5m CPU against 5m / 32Mi, limit 128Mi.
+
+The same DaemonSet runs **smartd** beside it, only to start SMART self-tests,
+which nothing had ever run on these disks. Short tests run daily at 02:00 UTC.
+Long tests run on the 1st and 15th, staggered 12 hours apart per disk, so the
+two halves of md0 never test at once: sda at 22:00 on the 1st (~2h), sdb at
+10:00 on the 2nd, sdc at 22:00 on the 2nd (~8h). The drives run the tests in
+firmware and log the results. The exporter does not read that log (it runs
+smartctl with `--log=error` only), but smartd does, and prints a line when a
+test fails; `DiskSelfTestFailed` is a VictoriaLogs rule on that line. smartd's
+own messages
+are in the pod's logs: `kubectl --context default -n monitoring logs
+daemonset/smartctl-exporter -c smartd`. To see the schedule a config change
+would give, without running anything, exec into the exporter pod and run
+`smartd --quit=showtests` against the new config.
 
 The `metrics` switches in `authentik/values.yaml`, `forgejo/values.yaml` and
 `cert-manager/values.yaml` are off. Turning one on needs a scrape object here
@@ -310,6 +323,8 @@ Rules of this cluster's own, beyond the chart's defaults, are in
 - **Disks**, from smartctl-exporter:
   - critical: `DiskSmartFailing` (the drive's own SMART verdict),
     `DiskSmartAttributeFailing` (an attribute at its failure threshold),
+    `DiskSelfTestFailed` (a self-test found an unreadable area; a
+    `type: vlogs` rule on smartd's log, the only one in the file),
     `NvmeCriticalWarning`;
   - warning: `DiskBadSectors` (any pending sector, or reallocated or
     uncorrectable sectors growing), `DiskErrorLogGrowing`, `DiskLinkErrors`
@@ -322,6 +337,15 @@ Rules of this cluster's own, beyond the chart's defaults, are in
   a day rather than on their value; rules.yaml lists those baselines. The
   failure of a disk in md0 is also covered by the chart's `NodeRAIDDegraded`
   and `NodeRAIDDiskFailure`, which see the array rather than the disk.
+
+Two of the chart's rules are off (`defaultRules.rules` in values.yaml):
+`KubeMemoryOvercommit` and `KubeCPUOvercommit`. They ask whether the cluster's
+requests would survive losing its largest node, which with two nodes and every
+stateful workload pinned to fedora-server they never will, so the memory one
+fired permanently. The *Resources* dashboard's per-node budget answers the
+question that matters here. The chart's rules are not in the chart: the
+`vmks-sync-job` Job fetches them and creates the VMRules, and it honours
+`enabled: false` per rule.
 
 The webhook URL is read from a file mounted from the `alertmanager-discord`
 Secret (`webhook_url_file`), so it never appears in the Alertmanager config

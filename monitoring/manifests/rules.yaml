@@ -37,9 +37,11 @@ spec:
     # disks reported when it went in (November 2026), so none of these fire on
     # history:
     #
-    #   sda  WD10EZEX (md0)     27k hours. 1,004 entries in its error log, all
-    #                           from one unreadable sector at hour 11,607 that
-    #                           has since been rewritten; 131 UDMA CRC errors.
+    #   sda  WD10EZEX (md0)     27k hours; 131 UDMA CRC errors. Its extended
+    #                           error log (smartctl -l xerror) holds 1,004
+    #                           entries, all from one unreadable sector at hour
+    #                           11,607 that has since been rewritten. The
+    #                           exporter reads the summary log, which is empty.
     #   sdb  Micron 5200 (OS)   47k hours, 19 average erase cycles; 14 CRC
     #                           errors, 107 command timeouts.
     #   sdc  IronWolf 4TB       3.3k hours, clean. Its Raw_Read_Error_Rate and
@@ -176,3 +178,36 @@ spec:
               The disk may have dropped off the bus, or the exporter lost its
               privileges. kubectl --context default -n monitoring logs
               daemonset/smartctl-exporter.
+
+    # Self-test results, from smartd's log rather than a metric: the exporter
+    # runs smartctl with --log=error only, so it never reads the self-test log.
+    # smartd (the second container in smartctl-exporter.yaml) does, because
+    # of its -l selftest, and prints one of these two lines when a test fails.
+    # vmalert sends `type: vlogs` groups to VictoriaLogs through
+    # vmauth-vmks-internal.
+    - name: disks-logs
+      type: vlogs
+      interval: 5m
+      rules:
+        # A failed self-test means the drive could not read part of its own
+        # surface, which a disk that still says PASSED can do for a long time.
+        # The log line appears once, so keep_firing_for holds the alert for a
+        # day, like the growth alerts above.
+        - alert: DiskSelfTestFailed
+          expr: >-
+            {kubernetes.pod_namespace="monitoring", kubernetes.container_name="smartd"}
+            ("Self-Test Log error count increased" or "new Self-Test Log error")
+            | extract "Device: /dev/<device> ["
+            | copy kubernetes.pod_node_name as node
+            | stats by (node, device) count() as errors
+            | filter errors:>0
+          keep_firing_for: 24h
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.node }}/{{ $labels.device }} failed a SMART self-test."
+            description: >-
+              smartctl -l selftest on the node shows which test and the LBA of
+              the first error. Plan the replacement; for md0's disks, run an md
+              check first (echo check > /sys/block/md0/md/sync_action) so the
+              other half rewrites what it can.
