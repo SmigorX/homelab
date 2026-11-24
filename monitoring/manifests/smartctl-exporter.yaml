@@ -70,13 +70,17 @@ spec:
         # the container does not have; at this config it is three lines per
         # disk at startup and one per disk every 30 minutes.
         #
-        # Schedule, in UTC (the container has no timezone; CET is +1):
-        #   short  every day at 02:00, a minute or two per disk
-        #   long   on the 1st and 15th at 22:00, staggered by 12 hours per
-        #          disk in scan order: sda the 1st at 22:00 (~2h), sdb the 2nd
-        #          at 10:00 (minutes), sdc the 2nd at 22:00 (~8h on an idle
-        #          disk, longer under seeding). The two halves of md0 never
-        #          test at once, and the long ones run overnight.
+        # Schedule, in UTC (the container has no timezone; CET is +1): a short
+        # test on the 1st of every month at 02:00, a minute or two per disk.
+        # Short tests check the electronics, the heads and a sample of the
+        # surface, not all of it.
+        #
+        # Long tests (the whole surface) are left out for now; sdc's takes ~8h
+        # on an idle disk and it is rarely idle. To add them, staggered so the
+        # two halves of md0 never test at once, e.g. on the 1st and 15th at
+        # 22:00, 12 hours apart per disk in scan order (sda the 1st at 22:00,
+        # ~2h; sdb the 2nd at 10:00; sdc the 2nd at 22:00):
+        #   -s (S/../01/./02|L/../(01|15)/./22:012)
         # -n standby,q skips a disk that is spun down instead of waking it.
         # -H, -l selftest and -l error only log; nothing here sends mail.
         - name: smartd
@@ -85,7 +89,7 @@ spec:
           args:
             - |
               cat > /etc/smartd.conf <<'EOF'
-              DEVICESCAN -H -l selftest -l error -n standby,q -s (S/../.././02|L/../(01|15)/./22:012)
+              DEVICESCAN -H -l selftest -l error -n standby,q -s S/../01/./02
               EOF
               exec /usr/sbin/smartd --debug --quit=never --configfile=/etc/smartd.conf
           securityContext:

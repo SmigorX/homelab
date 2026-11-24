@@ -160,18 +160,19 @@ disks on its own and rescans every 10 minutes, so a new disk needs no change.
 It uses ~20Mi and 1-5m CPU against 5m / 32Mi, limit 128Mi.
 
 The same DaemonSet runs **smartd** beside it, only to start SMART self-tests,
-which nothing had ever run on these disks. Short tests run daily at 02:00 UTC.
-Long tests run on the 1st and 15th, staggered 12 hours apart per disk, so the
-two halves of md0 never test at once: sda at 22:00 on the 1st (~2h), sdb at
-10:00 on the 2nd, sdc at 22:00 on the 2nd (~8h). The drives run the tests in
-firmware and log the results. The exporter does not read that log (it runs
-smartctl with `--log=error` only), but smartd does, and prints a line when a
-test fails; `DiskSelfTestFailed` is a VictoriaLogs rule on that line. smartd's
-own messages
-are in the pod's logs: `kubectl --context default -n monitoring logs
-daemonset/smartctl-exporter -c smartd`. To see the schedule a config change
-would give, without running anything, exec into the exporter pod and run
-`smartd --quit=showtests` against the new config.
+which nothing had ever run on these disks. For now only a short test runs, on
+the 1st of every month at 02:00 UTC: a minute or two per disk, covering the
+electronics, the heads and a sample of the surface. Long tests, which read the
+whole surface (~8h for sdc), are not scheduled yet; the comment in the manifest
+has a staggered schedule ready that keeps the two halves of md0 from testing at
+once. The drives run the tests in firmware and log the results. The exporter
+does not read that log (it runs smartctl with `--log=error` only), but smartd
+does, and prints a line when a test fails; `DiskSelfTestFailed` is a
+VictoriaLogs rule on that line. smartd's own messages are in the pod's logs:
+`kubectl --context default -n monitoring logs daemonset/smartctl-exporter -c
+smartd`. To see the schedule a config change would give, without running
+anything, exec into the exporter pod and run `smartd --quit=showtests` against
+the new config.
 
 The `metrics` switches in `authentik/values.yaml`, `forgejo/values.yaml` and
 `cert-manager/values.yaml` are off. Turning one on needs a scrape object here
